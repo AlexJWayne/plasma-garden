@@ -1,12 +1,9 @@
-import { projection } from './game-objects/camera'
 import {
   type m4x4f,
   mat4x4f,
   type v2f,
   type v3f,
-  type v4f,
   vec2f,
-  vec3f,
   vec4f,
 } from 'typegpu/data'
 import { cross, dot, normalize } from 'typegpu/std'

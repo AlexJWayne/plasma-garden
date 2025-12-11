@@ -2,13 +2,11 @@ import { blending, quadVert } from '../lib-gpu'
 import type { World } from '../main'
 import { presentationFormat } from '../setup-webgpu'
 import { CameraStruct } from './camera'
-import { Position, Velocity } from './physics'
+import { Drag, Player, Position, Velocity } from './components'
 import { addComponent, addEntity, query } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import { builtin, struct, vec2f, vec3f, vec4f } from 'typegpu/data'
-import { length, pow, smoothstep } from 'typegpu/std'
-
-export const Player = {}
+import { length, normalize, pow, smoothstep } from 'typegpu/std'
 
 const PlayerStruct = struct({
   position: vec2f,
@@ -22,11 +20,11 @@ export function createPlayerEntity(world: World) {
   Position.set(eid, 0, 0)
 
   addComponent(world, eid, Velocity)
-  Velocity.set(
-    eid,
-    (Math.random() * 2 - 1) * 0.01,
-    (Math.random() * 2 - 1) * 0.01,
-  )
+  Velocity.set(eid, 0, 0)
+  Velocity.maxSpeed[eid] = 4
+
+  addComponent(world, eid, Drag)
+  Drag[eid] = 4
 }
 
 export function createRenderPlayerSystem(world: World) {
@@ -94,4 +92,25 @@ function createFragmentProgram() {
     v = pow(v, 5)
     return vec4f(vec3f(0.6, 0.6, 1).mul(v), v)
   })
+}
+
+export function applyMovementInputToPlayer(world: World) {
+  const force = 3
+
+  let direction = vec2f(0)
+
+  if (world.input.isDown('arrowright')) direction.x += 1
+  if (world.input.isDown('arrowleft')) direction.x -= 1
+  if (world.input.isDown('arrowup')) direction.y += 1
+  if (world.input.isDown('arrowdown')) direction.y -= 1
+
+  direction = length(direction) > 0 ? normalize(direction) : direction
+
+  const player = query(world, [Player, Velocity])[0]
+  const maxSpeed = Velocity.maxSpeed[player]
+  const accel = direction.mul(force * world.delta)
+  let vel = Velocity.asVec2f(player).add(accel)
+  if (length(vel) > maxSpeed) vel = normalize(vel).mul(maxSpeed)
+
+  Velocity.set(player, vel.x, vel.y)
 }
