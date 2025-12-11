@@ -17,14 +17,14 @@ export function createPlayerEntity(world: World) {
   addComponent(world, eid, Player)
 
   addComponent(world, eid, Position)
-  Position.set(eid, 0, 0)
+  Position[eid] = vec2f()
 
   addComponent(world, eid, Velocity)
   Velocity.set(eid, 0, 0)
-  Velocity.maxSpeed[eid] = 4
+  Velocity.maxSpeed[eid] = 2
 
   addComponent(world, eid, Drag)
-  Drag[eid] = 4
+  Drag[eid] = 2
 }
 
 export function createRenderPlayerSystem(world: World) {
@@ -48,7 +48,7 @@ export function createRenderPlayerSystem(world: World) {
     const player = query(world, [Player, Position])[0]
 
     playerBuffer.write({
-      position: vec2f(Position.x[player], Position.y[player]),
+      position: Position[player],
     })
 
     renderPipeline

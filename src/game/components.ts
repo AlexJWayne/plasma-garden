@@ -1,4 +1,4 @@
-import { vec2f, vec3f } from 'typegpu/data'
+import { type v2f, vec2f, vec3f } from 'typegpu/data'
 
 const MAX_ENT = 10_000
 
@@ -31,7 +31,7 @@ function createVec2Component<T>(extend: T = {} as T) {
   return Component
 }
 
-export const Position = createVec2Component()
+export const Position = [] as v2f[]
 export const Velocity = createVec2Component({
   maxSpeed: new Float32Array(MAX_ENT),
 })

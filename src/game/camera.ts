@@ -29,7 +29,7 @@ export function positionCameraSystem(world: World) {
   const { camera } = world
 
   const player = query(world, [Player, Position])[0]
-  const playerPos = Position.asVec3f(player)
+  const playerPos = vec3f(Position[player], 0)
 
   camera.target.current = camera.target.current.add(
     playerPos.sub(camera.target.current).mul(10 * world.delta),
