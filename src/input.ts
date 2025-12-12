@@ -8,16 +8,35 @@ const keysState: Record<
   arrowdown: 'up',
   arrowleft: 'up',
   arrowright: 'up',
+  w: 'up',
+  a: 'up',
+  s: 'up',
+  d: 'up',
+}
+
+const directions = {
+  up: ['arrowup', 'w'],
+  down: ['arrowdown', 's'],
+  left: ['arrowleft', 'a'],
+  right: ['arrowright', 'd'],
 }
 
 export function setupInput() {
   document.addEventListener('keydown', onKeyDown)
   document.addEventListener('keyup', onKeyUp)
 
+  function isDown(key: string) {
+    return keysState[key] === 'down' || keysState[key] === 'pressed'
+  }
+
+  function isDirectionDown(direction: keyof typeof directions) {
+    return directions[direction].some(isDown)
+  }
+
   return {
     state: keysState,
-    isDown: (key: string) =>
-      keysState[key] === 'down' || keysState[key] === 'pressed',
+    isDown,
+    isDirectionDown,
   }
 }
 

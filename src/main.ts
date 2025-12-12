@@ -1,8 +1,9 @@
+import { createWorld } from 'bitecs'
+
 import { setupCamera } from './game/camera'
 import { startGame } from './game/main'
 import { setupInput } from './input'
 import { setupWebgpu } from './setup-webgpu'
-import { createWorld } from 'bitecs'
 
 const { canvas, ctx, root } = await setupWebgpu()
 

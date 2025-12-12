@@ -1,40 +1,35 @@
-import type { World } from '../main'
-import { Drag, Position, Velocity } from './components'
 import { query } from 'bitecs'
-import { vec2f } from 'typegpu/data'
+import { length, normalize } from 'typegpu/std'
+
+import type { World } from '../main'
+
+import { Drag, MaxSpeed, Position, Velocity } from './components'
 
 export function moveSystem(world: World) {
   for (const eid of query(world, [Position, Velocity])) {
-    Position[eid] = Position[eid].add(
-      vec2f(
-        Velocity.x[eid] * world.delta, //
-        Velocity.y[eid] * world.delta,
-      ),
-    )
+    Position[eid] = Position[eid].add(Velocity[eid].mul(world.delta))
   }
 }
 
 export function bounceOffBoundariesSystem(world: World) {
   for (const eid of query(world, [Position, Velocity])) {
     const pos = Position[eid]
-
-    const vx = Velocity.x[eid]
-    const vy = Velocity.y[eid]
+    const vel = Velocity[eid]
 
     if (pos.x > 1) {
-      Velocity.x[eid] = -Math.abs(vx)
+      vel.x = -Math.abs(vel.x)
       pos.x = 1
     }
     if (pos.y > 1) {
-      Velocity.y[eid] = -Math.abs(vy)
+      vel.y = -Math.abs(vel.y)
       pos.y = 1
     }
     if (pos.x < -1) {
-      Velocity.x[eid] = Math.abs(vx)
+      vel.x = Math.abs(vel.x)
       pos.x = -1
     }
     if (pos.y < -1) {
-      Velocity.y[eid] = Math.abs(vy)
+      vel.y = Math.abs(vel.y)
       pos.y = -1
     }
   }
@@ -42,14 +37,14 @@ export function bounceOffBoundariesSystem(world: World) {
 
 export function applyDragSystem(world: World) {
   for (const eid of query(world, [Position, Velocity, Drag])) {
-    const vx = Velocity.x[eid]
-    const vy = Velocity.y[eid]
-    const drag = Drag[eid]
+    Velocity[eid] = Velocity[eid].mul(1 - Drag[eid] * world.delta)
+  }
+}
 
-    Velocity.set(
-      eid,
-      vx - vx * drag * world.delta,
-      vy - vy * drag * world.delta,
-    )
+export function applyMaxSpeedSystem(world: World) {
+  for (const eid of query(world, [Velocity, MaxSpeed])) {
+    const vel = Velocity[eid]
+    const maxSpeed = MaxSpeed[eid]
+    if (length(vel) > maxSpeed) Velocity[eid] = normalize(vel).mul(maxSpeed)
   }
 }

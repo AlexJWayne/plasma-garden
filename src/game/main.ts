@@ -1,9 +1,11 @@
 import { keyboardInputSystem } from '../input'
 import type { World } from '../main'
+
 import { createRenderBackgroundSystem } from './background'
 import { positionCameraSystem } from './camera'
 import {
   applyDragSystem,
+  applyMaxSpeedSystem,
   bounceOffBoundariesSystem,
   moveSystem,
 } from './physics'
@@ -27,6 +29,7 @@ export function startGame(world: World) {
     applyMovementInputToPlayer(world)
     moveSystem(world)
     applyDragSystem(world)
+    applyMaxSpeedSystem(world)
     bounceOffBoundariesSystem(world)
 
     keyboardInputSystem()

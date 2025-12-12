@@ -1,12 +1,14 @@
-import { blending, quadVert } from '../lib-gpu'
-import type { World } from '../main'
-import { presentationFormat } from '../setup-webgpu'
-import { CameraStruct } from './camera'
-import { Drag, Player, Position, Velocity } from './components'
 import { addComponent, addEntity, query } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import { builtin, struct, vec2f, vec3f, vec4f } from 'typegpu/data'
 import { length, normalize, pow, smoothstep } from 'typegpu/std'
+
+import { blending, quadVert } from '../lib-gpu'
+import type { World } from '../main'
+import { presentationFormat } from '../setup-webgpu'
+
+import { CameraStruct } from './camera'
+import { Drag, MaxSpeed, Player, Position, Velocity } from './components'
 
 const PlayerStruct = struct({
   position: vec2f,
@@ -20,8 +22,10 @@ export function createPlayerEntity(world: World) {
   Position[eid] = vec2f()
 
   addComponent(world, eid, Velocity)
-  Velocity.set(eid, 0, 0)
-  Velocity.maxSpeed[eid] = 2
+  Velocity[eid] = vec2f(0)
+
+  addComponent(world, eid, MaxSpeed)
+  MaxSpeed[eid] = 2
 
   addComponent(world, eid, Drag)
   Drag[eid] = 2
@@ -98,19 +102,14 @@ export function applyMovementInputToPlayer(world: World) {
   const force = 3
 
   let direction = vec2f(0)
-
-  if (world.input.isDown('arrowright')) direction.x += 1
-  if (world.input.isDown('arrowleft')) direction.x -= 1
-  if (world.input.isDown('arrowup')) direction.y += 1
-  if (world.input.isDown('arrowdown')) direction.y -= 1
+  if (world.input.isDirectionDown('right')) direction.x += 1
+  if (world.input.isDirectionDown('left')) direction.x -= 1
+  if (world.input.isDirectionDown('up')) direction.y += 1
+  if (world.input.isDirectionDown('down')) direction.y -= 1
 
   direction = length(direction) > 0 ? normalize(direction) : direction
 
   const player = query(world, [Player, Velocity])[0]
-  const maxSpeed = Velocity.maxSpeed[player]
   const accel = direction.mul(force * world.delta)
-  let vel = Velocity.asVec2f(player).add(accel)
-  if (length(vel) > maxSpeed) vel = normalize(vel).mul(maxSpeed)
-
-  Velocity.set(player, vel.x, vel.y)
+  Velocity[player] = Velocity[player].add(accel)
 }
