@@ -54,7 +54,7 @@ function onKeyUp(event: KeyboardEvent) {
   if (state === 'down') keysState[key] = 'released'
 }
 
-export function keyboardInputSystem() {
+export function setKeyStateSystem() {
   for (const key in keysState) {
     const state = keysState[key]
     if (state === 'pressed') keysState[key] = 'down'

@@ -8,27 +8,37 @@ import type { World } from '../main'
 import { presentationFormat } from '../setup-webgpu'
 
 import { CameraStruct } from './camera'
-import { Drag, MaxSpeed, Player, Position, Velocity } from './components'
+import {
+  Acceleration,
+  Drag,
+  MaxSpeed,
+  Player,
+  Position,
+  Velocity,
+} from './components'
 
 const PlayerStruct = struct({
   position: vec2f,
 })
 
 export function createPlayerEntity(world: World) {
-  const eid = addEntity(world)
-  addComponent(world, eid, Player)
+  const eid = addEntity(
+    world,
+    Player,
+    Position,
+    Velocity,
+    Acceleration,
+    MaxSpeed,
+    Drag,
+  )
 
-  addComponent(world, eid, Position)
-  Position[eid] = vec2f()
-
-  addComponent(world, eid, Velocity)
+  Position[eid] = vec2f(0)
   Velocity[eid] = vec2f(0)
-
-  addComponent(world, eid, MaxSpeed)
+  Acceleration[eid] = vec2f(0)
   MaxSpeed[eid] = 2
+  Drag[eid] = 1
 
-  addComponent(world, eid, Drag)
-  Drag[eid] = 2
+  return eid
 }
 
 export function createRenderPlayerSystem(world: World) {
@@ -99,7 +109,7 @@ function createFragmentProgram() {
 }
 
 export function applyMovementInputToPlayer(world: World) {
-  const force = 3
+  const force = 200
 
   let direction = vec2f(0)
   if (world.input.isDirectionDown('right')) direction.x += 1
@@ -109,7 +119,6 @@ export function applyMovementInputToPlayer(world: World) {
 
   direction = length(direction) > 0 ? normalize(direction) : direction
 
-  const player = query(world, [Player, Velocity])[0]
-  const accel = direction.mul(force * world.delta)
-  Velocity[player] = Velocity[player].add(accel)
+  const player = query(world, [Player, Velocity, Acceleration])[0]
+  Acceleration[player] = direction.mul(force * world.delta)
 }

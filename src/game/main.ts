@@ -1,14 +1,13 @@
-import { keyboardInputSystem } from '../input'
+import { vec2f } from 'typegpu/data'
+import { normalize } from 'typegpu/std'
+
+import { setKeyStateSystem } from '../input'
 import type { World } from '../main'
 
 import { createRenderBackgroundSystem } from './background'
+import { createBullet, createRenderBulletSystem } from './bullet'
 import { positionCameraSystem } from './camera'
-import {
-  applyDragSystem,
-  applyMaxSpeedSystem,
-  bounceOffBoundariesSystem,
-  moveSystem,
-} from './physics'
+import { physicsSystem } from './physics'
 import {
   applyMovementInputToPlayer,
   createPlayerEntity,
@@ -20,6 +19,7 @@ export function startGame(world: World) {
 
   const renderPlayerSystem = createRenderPlayerSystem(world)
   const renderBackgroundSystem = createRenderBackgroundSystem(world)
+  const renderBulletSystem = createRenderBulletSystem(world)
 
   let lastTime = 0
   function tick(time: number) {
@@ -27,19 +27,27 @@ export function startGame(world: World) {
     lastTime = time
 
     applyMovementInputToPlayer(world)
-    moveSystem(world)
-    applyDragSystem(world)
-    applyMaxSpeedSystem(world)
-    bounceOffBoundariesSystem(world)
+    physicsSystem(world)
 
-    keyboardInputSystem()
+    setKeyStateSystem()
 
     positionCameraSystem(world)
     renderBackgroundSystem(world)
     renderPlayerSystem(world)
+    renderBulletSystem(world)
 
     requestAnimationFrame(tick)
   }
 
   requestAnimationFrame(tick)
+
+  // TEMP
+  for (let i = 0; i < 50; i++) {
+    createBullet(
+      world,
+      vec2f(0, 0),
+      normalize(vec2f(Math.random() * 2 - 1, Math.random() * 2 - 1)).mul(0.5),
+      10,
+    )
+  }
 }
