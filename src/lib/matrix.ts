@@ -1,20 +1,6 @@
 import { type m4x4f, mat4x4f, type v3f, vec4f } from 'typegpu/data'
 import { cross, dot, normalize } from 'typegpu/std'
 
-export const blending = {
-  // premultiplied alpha
-  normal: {
-    color: {
-      srcFactor: 'one',
-      dstFactor: 'one-minus-src-alpha',
-    },
-    alpha: {
-      srcFactor: 'one',
-      dstFactor: 'one-minus-src-alpha',
-    },
-  },
-} satisfies Record<string, GPUBlendState>
-
 export function lookAt(eye: v3f, target: v3f, up: v3f): m4x4f {
   'use gpu'
   const zaxis = normalize(eye.sub(target))

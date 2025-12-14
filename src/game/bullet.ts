@@ -11,8 +11,8 @@ import {
 } from 'typegpu/data'
 import { length, smoothstep } from 'typegpu/std'
 
-import { blending } from '../lib-gpu'
 import { quadVertices } from '../lib/geometry'
+import { blending } from '../lib/web-gpu'
 import type { World } from '../main'
 import { depthFormat, presentationFormat } from '../setup-webgpu'
 
@@ -106,7 +106,7 @@ function createVertexProgram(
     },
   })(({ idx, pos }) => {
     const uv = quadVertices.$[idx]
-    const outPos = vec3f(uv.mul(0.01).add(pos), 0)
+    const outPos = vec3f(uv.mul(0.01).add(pos), 0.05)
     return {
       pos: cameraBuffer.$.viewMatrix.mul(vec4f(outPos, 1)),
       uv,

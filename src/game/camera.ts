@@ -3,7 +3,7 @@ import { type TgpuRoot } from 'typegpu'
 import { mat4x4f, struct, vec3f } from 'typegpu/data'
 import { mat4 } from 'wgpu-matrix'
 
-import { lookAt } from '../lib-gpu'
+import { lookAt } from '../lib/matrix'
 import type { World } from '../main'
 
 import { Player, Position } from './components'
@@ -16,7 +16,7 @@ export const projection = mat4.perspective(
   mat4x4f(),
 )
 
-const offset = vec3f(0.25, -0.5, 1)
+const offset = vec3f(0, -0.5, 1)
 const up = vec3f(0, 0, 1)
 
 export const CameraStruct = struct({ viewMatrix: mat4x4f })

@@ -3,8 +3,8 @@ import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import { builtin, struct, vec2f, vec3f, vec4f } from 'typegpu/data'
 import { length, normalize, pow, smoothstep } from 'typegpu/std'
 
-import { blending } from '../lib-gpu'
 import { cubeVertices, quadVertices } from '../lib/geometry'
+import { blending } from '../lib/web-gpu'
 import type { World } from '../main'
 import { depthFormat, presentationFormat } from '../setup-webgpu'
 
@@ -17,6 +17,8 @@ import {
   Position,
   Velocity,
 } from './components'
+
+const SIZE = 0.2
 
 const PlayerStruct = struct({
   position: vec2f,
@@ -112,7 +114,9 @@ function createVertexProgram(
     out: { localPos: vec3f, worldPos: vec3f, clipPos: builtin.position },
   })(({ idx }) => {
     const localPos = cubeVertices.$[idx]
-    const worldPos = localPos.mul(0.1).add(vec3f(playerBuffer.$.position, 0))
+    const worldPos = localPos
+      .mul(SIZE / 2)
+      .add(vec3f(playerBuffer.$.position, SIZE / 2))
     const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
     return { localPos, worldPos, clipPos }
   })
