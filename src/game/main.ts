@@ -8,11 +8,8 @@ import { createRenderBackgroundSystem } from './background'
 import { createBullet, createRenderBulletSystem } from './bullet'
 import { positionCameraSystem } from './camera'
 import { physicsSystem } from './physics'
-import {
-  applyMovementInputToPlayer,
-  createPlayerEntity,
-  createRenderPlayerSystem,
-} from './player'
+import { applyMovementInputToPlayer, createPlayerEntity } from './player'
+import { createRenderPlayerSystem } from './player-renderer'
 
 export function startGame(world: World) {
   createPlayerEntity(world)
@@ -42,11 +39,11 @@ export function startGame(world: World) {
   requestAnimationFrame(tick)
 
   // TEMP
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 10; i++) {
     createBullet(
       world,
       vec2f(0, 0),
-      normalize(vec2f(Math.random() * 2 - 1, Math.random() * 2 - 1)).mul(0.5),
+      normalize(vec2f(Math.random() * 2 - 1, Math.random() * 2 - 1)).mul(0.2),
       10,
     )
   }

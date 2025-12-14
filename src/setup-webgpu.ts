@@ -3,10 +3,15 @@ import tgpu from 'typegpu'
 export const presentationFormat = navigator.gpu.getPreferredCanvasFormat()
 export const depthFormat: GPUTextureFormat = 'depth24plus'
 
+const supersampling = 2
+const canvasSize = 1000
+
 export async function setupWebgpu() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
-  canvas.width = 1000
-  canvas.height = 1000
+  canvas.width = canvasSize * supersampling
+  canvas.height = canvasSize * supersampling
+  canvas.style.width = `${canvasSize}px`
+  canvas.style.height = `${canvasSize}px`
 
   const ctx = canvas.getContext('webgpu')
   if (!ctx) {

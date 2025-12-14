@@ -16,10 +16,13 @@ export const projection = mat4.perspective(
   mat4x4f(),
 )
 
-const offset = vec3f(0, -0.5, 1)
+const offset = vec3f(0.2, -0.5, 1)
 const up = vec3f(0, 0, 1)
 
-export const CameraStruct = struct({ viewMatrix: mat4x4f })
+export const CameraStruct = struct({
+  viewMatrix: mat4x4f,
+  pos: vec3f,
+})
 
 export function setupCamera(root: TgpuRoot) {
   const buffer = root.createBuffer(CameraStruct).$usage('uniform')
@@ -36,9 +39,8 @@ export function positionCameraSystem(world: World) {
   camera.target.current = camera.target.current.add(
     playerPos.sub(camera.target.current).mul(10 * world.delta),
   )
+  const pos = camera.target.current.add(offset)
 
-  const viewMatrix = projection.mul(
-    lookAt(camera.target.current.add(offset), camera.target.current, up),
-  )
-  camera.buffer.write({ viewMatrix })
+  const viewMatrix = projection.mul(lookAt(pos, camera.target.current, up))
+  camera.buffer.write({ viewMatrix, pos })
 }
