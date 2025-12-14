@@ -1,11 +1,4 @@
-import {
-  type m4x4f,
-  mat4x4f,
-  type v2f,
-  type v3f,
-  vec2f,
-  vec4f,
-} from 'typegpu/data'
+import { type m4x4f, mat4x4f, type v3f, vec4f } from 'typegpu/data'
 import { cross, dot, normalize } from 'typegpu/std'
 
 export const blending = {
@@ -21,19 +14,6 @@ export const blending = {
     },
   },
 } satisfies Record<string, GPUBlendState>
-
-export function quadVert(idx: number): v2f {
-  'use gpu'
-  const quadVertices = [
-    vec2f(-1, -1),
-    vec2f(-1, 1),
-    vec2f(1, 1),
-    vec2f(1, 1),
-    vec2f(1, -1),
-    vec2f(-1, -1),
-  ]
-  return quadVertices[idx]
-}
 
 export function lookAt(eye: v3f, target: v3f, up: v3f): m4x4f {
   'use gpu'

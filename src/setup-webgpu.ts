@@ -1,6 +1,7 @@
 import tgpu from 'typegpu'
 
 export const presentationFormat = navigator.gpu.getPreferredCanvasFormat()
+export const depthFormat: GPUTextureFormat = 'depth24plus'
 
 export async function setupWebgpu() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
@@ -22,5 +23,11 @@ export async function setupWebgpu() {
     alphaMode: 'premultiplied',
   })
 
-  return { canvas, ctx, root }
+  const depthTexture = root.device.createTexture({
+    size: [canvas.width, canvas.height],
+    format: depthFormat,
+    usage: GPUTextureUsage.RENDER_ATTACHMENT,
+  })
+
+  return { canvas, ctx, root, depthTexture }
 }

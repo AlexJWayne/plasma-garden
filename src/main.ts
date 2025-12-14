@@ -5,12 +5,13 @@ import { startGame } from './game/main'
 import { setupInput } from './input'
 import { setupWebgpu } from './setup-webgpu'
 
-const { canvas, ctx, root } = await setupWebgpu()
+const { canvas, ctx, root, depthTexture } = await setupWebgpu()
 
 const world = createWorld({
   canvas,
   ctx,
   root,
+  depthTexture,
   camera: setupCamera(root),
   input: setupInput(),
   delta: 0,

@@ -1,11 +1,12 @@
-import { addComponent, addEntity, query } from 'bitecs'
+import { addEntity, query } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import { builtin, struct, vec2f, vec3f, vec4f } from 'typegpu/data'
 import { length, normalize, pow, smoothstep } from 'typegpu/std'
 
-import { blending, quadVert } from '../lib-gpu'
+import { blending } from '../lib-gpu'
+import { cubeVertices, quadVertices } from '../lib/geometry'
 import type { World } from '../main'
-import { presentationFormat } from '../setup-webgpu'
+import { depthFormat, presentationFormat } from '../setup-webgpu'
 
 import { CameraStruct } from './camera'
 import {
@@ -56,6 +57,11 @@ export function createRenderPlayerSystem(world: World) {
       format: presentationFormat,
       blend: blending.normal,
     })
+    .withDepthStencil({
+      format: depthFormat,
+      depthWriteEnabled: true,
+      depthCompare: 'less',
+    })
     .createPipeline()
 
   function render(world: World) {
@@ -71,41 +77,15 @@ export function createRenderPlayerSystem(world: World) {
         loadOp: 'load',
         storeOp: 'store',
       })
-      .draw(6)
+      .withDepthStencilAttachment({
+        view: world.depthTexture.createView(),
+        depthLoadOp: 'load',
+        depthStoreOp: 'store',
+      })
+      .draw(cubeVertices.value.length)
   }
 
   return render
-}
-
-function createVertexProgram(
-  cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
-  playerBuffer: TgpuBufferUniform<typeof PlayerStruct>,
-) {
-  return tgpu['~unstable'].vertexFn({
-    in: { idx: builtin.vertexIndex },
-    out: {
-      pos: builtin.position,
-      uv: vec2f,
-    },
-  })(({ idx }) => {
-    const uv = quadVert(idx)
-    const pos = vec3f(uv.mul(0.1).add(playerBuffer.$.position), 0)
-    return {
-      pos: cameraBuffer.$.viewMatrix.mul(vec4f(pos, 1)),
-      uv,
-    }
-  })
-}
-
-function createFragmentProgram() {
-  return tgpu['~unstable'].fragmentFn({
-    in: { uv: vec2f },
-    out: vec4f,
-  })(({ uv }) => {
-    let v = smoothstep(1, 0.1, length(uv))
-    v = pow(v, 5)
-    return vec4f(vec3f(0.6, 0.6, 1).mul(v), v)
-  })
 }
 
 export function applyMovementInputToPlayer(world: World) {
@@ -121,4 +101,28 @@ export function applyMovementInputToPlayer(world: World) {
 
   const player = query(world, [Player, Velocity, Acceleration])[0]
   Acceleration[player] = direction.mul(force * world.delta)
+}
+
+function createVertexProgram(
+  cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
+  playerBuffer: TgpuBufferUniform<typeof PlayerStruct>,
+) {
+  return tgpu['~unstable'].vertexFn({
+    in: { idx: builtin.vertexIndex },
+    out: { localPos: vec3f, worldPos: vec3f, clipPos: builtin.position },
+  })(({ idx }) => {
+    const localPos = cubeVertices.$[idx]
+    const worldPos = localPos.mul(0.1).add(vec3f(playerBuffer.$.position, 0))
+    const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
+    return { localPos, worldPos, clipPos }
+  })
+}
+
+function createFragmentProgram() {
+  return tgpu['~unstable'].fragmentFn({
+    in: { localPos: vec3f, worldPos: vec3f },
+    out: vec4f,
+  })(({ localPos, worldPos }) => {
+    return vec4f(localPos.div(2).add(0.5), 1)
+  })
 }

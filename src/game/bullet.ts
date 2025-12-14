@@ -11,9 +11,10 @@ import {
 } from 'typegpu/data'
 import { length, smoothstep } from 'typegpu/std'
 
-import { blending, quadVert } from '../lib-gpu'
+import { blending } from '../lib-gpu'
+import { quadVertices } from '../lib/geometry'
 import type { World } from '../main'
-import { presentationFormat } from '../setup-webgpu'
+import { depthFormat, presentationFormat } from '../setup-webgpu'
 
 import type { CameraStruct } from './camera'
 import { Bullet, Position, Velocity } from './components'
@@ -55,6 +56,11 @@ export function createRenderBulletSystem(world: World) {
       format: presentationFormat,
       blend: blending.normal,
     })
+    .withDepthStencil({
+      format: depthFormat,
+      depthWriteEnabled: true,
+      depthCompare: 'less',
+    })
     .createPipeline()
     .with(bulletsLayout, bulletsBuffer)
 
@@ -75,6 +81,11 @@ export function createRenderBulletSystem(world: World) {
         loadOp: 'load',
         storeOp: 'store',
       })
+      .withDepthStencilAttachment({
+        view: world.depthTexture.createView(),
+        depthLoadOp: 'load',
+        depthStoreOp: 'store',
+      })
       .draw(6, bullets.length)
   }
 
@@ -94,7 +105,7 @@ function createVertexProgram(
       uv: vec2f,
     },
   })(({ idx, pos }) => {
-    const uv = quadVert(idx)
+    const uv = quadVertices.$[idx]
     const outPos = vec3f(uv.mul(0.01).add(pos), 0)
     return {
       pos: cameraBuffer.$.viewMatrix.mul(vec4f(outPos, 1)),

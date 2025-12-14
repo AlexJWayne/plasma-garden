@@ -9,10 +9,5 @@ export const MaxSpeed = [] as number[]
 
 // Game Objects
 export const Player = {}
-
 export const Camera = {}
-
-export const Bullet = [] as Bullet[]
-export type Bullet = {
-  damage: number
-}
+export const Bullet = [] as { damage: number }[]

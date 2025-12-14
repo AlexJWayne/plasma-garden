@@ -1,15 +1,22 @@
-import { quadVert } from '../lib-gpu'
-import type { World } from '../main'
-import { presentationFormat } from '../setup-webgpu'
-import { CameraStruct } from './camera'
 import { type TgpuBufferUniform, tgpu } from 'typegpu'
 import { builtin, vec2f, vec3f, vec4f } from 'typegpu/data'
 import { abs, fract, min, smoothstep } from 'typegpu/std'
+
+import { quadVertices } from '../lib/geometry'
+import type { World } from '../main'
+import { depthFormat, presentationFormat } from '../setup-webgpu'
+
+import { CameraStruct } from './camera'
 
 export function createRenderBackgroundSystem(world: World) {
   const renderPipeline = world.root['~unstable']
     .withVertex(createVertexProgram(world.camera.buffer.as('uniform')), {})
     .withFragment(createFragmentProgram(), { format: presentationFormat })
+    .withDepthStencil({
+      format: depthFormat,
+      depthWriteEnabled: true,
+      depthCompare: 'less',
+    })
     .createPipeline()
 
   function render(world: World) {
@@ -18,6 +25,12 @@ export function createRenderBackgroundSystem(world: World) {
         view: world.ctx.getCurrentTexture().createView(),
         loadOp: 'clear',
         storeOp: 'store',
+      })
+      .withDepthStencilAttachment({
+        view: world.depthTexture.createView(),
+        depthLoadOp: 'clear',
+        depthClearValue: 1.0,
+        depthStoreOp: 'store',
       })
       .draw(6)
   }
@@ -35,7 +48,7 @@ function createVertexProgram(
       uv: vec2f,
     },
   })(({ idx }) => {
-    const uv = quadVert(idx)
+    const uv = quadVertices.$[idx]
     return {
       pos: cameraBuffer.$.viewMatrix.mul(vec4f(uv, 0, 1)),
       uv,
