@@ -4,7 +4,7 @@ import { abs, fract, min, smoothstep } from 'typegpu/std'
 
 import { quadVertices } from '../lib/geometry'
 import type { World } from '../main'
-import { depthFormat, presentationFormat } from '../setup-webgpu'
+import { depthFormat, presentationFormat, sampleCount } from '../setup-webgpu'
 
 import { CameraStruct } from './camera'
 
@@ -17,12 +17,14 @@ export function createRenderBackgroundSystem(world: World) {
       depthWriteEnabled: true,
       depthCompare: 'less',
     })
+    .withMultisample({ count: sampleCount })
     .createPipeline()
 
   function render(world: World) {
     renderPipeline
       .withColorAttachment({
-        view: world.ctx.getCurrentTexture().createView(),
+        view: world.colorTexture.createView(),
+        resolveTarget: world.ctx.getCurrentTexture().createView(),
         loadOp: 'clear',
         storeOp: 'store',
       })

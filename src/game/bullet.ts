@@ -14,7 +14,7 @@ import { length, smoothstep } from 'typegpu/std'
 import { quadVertices } from '../lib/geometry'
 import { blending } from '../lib/web-gpu'
 import type { World } from '../main'
-import { depthFormat, presentationFormat } from '../setup-webgpu'
+import { depthFormat, presentationFormat, sampleCount } from '../setup-webgpu'
 
 import type { CameraStruct } from './camera'
 import { Bullet, Position, Velocity } from './components'
@@ -61,6 +61,7 @@ export function createRenderBulletSystem(world: World) {
       depthWriteEnabled: true,
       depthCompare: 'less',
     })
+    .withMultisample({ count: sampleCount })
     .createPipeline()
     .with(bulletsLayout, bulletsBuffer)
 
@@ -77,7 +78,8 @@ export function createRenderBulletSystem(world: World) {
 
     renderPipeline
       .withColorAttachment({
-        view: world.ctx.getCurrentTexture().createView(),
+        view: world.colorTexture.createView(),
+        resolveTarget: world.ctx.getCurrentTexture().createView(),
         loadOp: 'load',
         storeOp: 'store',
       })

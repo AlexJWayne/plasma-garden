@@ -1,4 +1,10 @@
-import { opSmoothUnion, opUnion, sdBoxFrame3d, sdSphere } from '@typegpu/sdf'
+import {
+  opSmoothUnion,
+  opUnion,
+  sdBoxFrame3d,
+  sdPie,
+  sdSphere,
+} from '@typegpu/sdf'
 import { query } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
@@ -15,9 +21,10 @@ import {
 import { discard, length, normalize, smoothstep } from 'typegpu/std'
 
 import { cubeVertices } from '../lib/geometry'
+import { sdTorus } from '../lib/sdf'
 import { blending } from '../lib/web-gpu'
 import type { World } from '../main'
-import { depthFormat, presentationFormat } from '../setup-webgpu'
+import { depthFormat, presentationFormat, sampleCount } from '../setup-webgpu'
 
 import type { CameraStruct } from './camera'
 import { Player, Position } from './components'
@@ -44,8 +51,10 @@ export function createRenderPlayerSystem(world: World) {
         playerBuffer.as('uniform'),
       ),
       {
-        format: presentationFormat,
-        blend: blending.normal,
+        color: {
+          format: presentationFormat,
+          blend: blending.normal,
+        },
       },
     )
     .withDepthStencil({
@@ -57,6 +66,7 @@ export function createRenderPlayerSystem(world: World) {
       topology: 'triangle-list',
       cullMode: 'back',
     })
+    .withMultisample({ count: sampleCount })
     .createPipeline()
 
   function render(world: World) {
@@ -68,9 +78,12 @@ export function createRenderPlayerSystem(world: World) {
 
     renderPipeline
       .withColorAttachment({
-        view: world.ctx.getCurrentTexture().createView(),
-        loadOp: 'load',
-        storeOp: 'store',
+        color: {
+          view: world.colorTexture.createView(),
+          resolveTarget: world.ctx.getCurrentTexture().createView(),
+          loadOp: 'load',
+          storeOp: 'store',
+        },
       })
       .withDepthStencilAttachment({
         view: world.depthTexture.createView(),
@@ -114,16 +127,22 @@ function createFragmentProgram(
 ) {
   return tgpu['~unstable'].fragmentFn({
     in: { localPos: vec3f, worldPos: vec3f },
-    out: vec4f,
+    out: { color: vec4f, depth: builtin.fragDepth },
   })(({ localPos, worldPos }) => {
     const hit = raymarch(
       cameraBuffer.$.pos,
       worldPos,
       vec3f(playerBuffer.$.position, SIZE / 2),
     )
-    if (!hit.hit) discard()
-    if (!hit.hit) return vec4f(vec3f(0.25), 1)
-    return vec4f(vec3f(0, smoothstep(0, SIZE, hit.pos.z), 0), 1)
+    // if (!hit.hit) return { color: vec4f(0.1), depth: 0 } // debug
+    if (!hit.hit) return { color: vec4f(0), depth: 1 }
+
+    const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
+
+    return {
+      color: vec4f(vec3f(0, smoothstep(-0.1, SIZE + 0.1, hit.pos.z), 0), 1),
+      depth: hitClipPos.z / hitClipPos.w,
+    }
   })
 }
 
@@ -134,13 +153,13 @@ function scene(p: v3f, playerPos: v3f): number {
   let dist = f32(1e9)
   dist = opUnion(
     dist,
-    sdBoxFrame3d(centeredP, vec3f((SIZE / 2) * 0.6), SIZE * 0.015),
+    sdBoxFrame3d(centeredP, vec3f((SIZE / 2) * 0.9), SIZE * 0.015),
   )
-  dist = opUnion(dist, sdSphere(centeredP, SIZE * 0.25))
+  dist = opUnion(dist, sdTorus(centeredP, SIZE * 0.3, SIZE * 0.05))
   return dist
 }
 
-const Hit = struct({ pos: vec3f, hit: bool })
+const Hit = struct({ hit: bool, pos: vec3f, totalDistance: f32 })
 function raymarch(
   cameraPos: v3f,
   worldPos: v3f,
@@ -160,11 +179,11 @@ function raymarch(
     const point = cameraPos.add(rayDirection.mul(totalDistance))
     const distance = scene(point, playerPos)
 
-    if (distance < EPSILON) return Hit({ pos: point, hit: true })
+    if (distance < EPSILON) return Hit({ hit: true, pos: point, totalDistance })
     if (distance > MAX_DISTANCE) break
 
     totalDistance += distance
   }
 
-  return Hit({ pos: vec3f(), hit: false })
+  return Hit({ hit: false, pos: vec3f(), totalDistance })
 }
