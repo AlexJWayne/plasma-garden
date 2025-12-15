@@ -1,8 +1,9 @@
 import {
   opSmoothUnion,
   opUnion,
+  sdBox3d,
   sdBoxFrame3d,
-  sdPie,
+  sdCapsule,
   sdSphere,
 } from '@typegpu/sdf'
 import { query } from 'bitecs'
@@ -12,27 +13,33 @@ import {
   bool,
   builtin,
   f32,
+  mat4x4f,
   struct,
   type v3f,
   vec2f,
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import { discard, length, normalize, smoothstep } from 'typegpu/std'
+import { abs, fract, length, normalize } from 'typegpu/std'
+import { mat4 } from 'wgpu-matrix'
 
 import { cubeVertices } from '../lib/geometry'
-import { sdTorus } from '../lib/sdf'
 import { blending } from '../lib/web-gpu'
 import type { World } from '../main'
 import { depthFormat, presentationFormat, sampleCount } from '../setup-webgpu'
 
 import type { CameraStruct } from './camera'
-import { Player, Position } from './components'
+import { Player, Position, Velocity } from './components'
 import { SIZE } from './player'
+
+const DEBUG = false
 
 const PlayerStruct = struct({
   position: vec2f,
+  transform: mat4x4f,
+  inverseTransform: mat4x4f,
 })
+type PlayerStruct = Infer<typeof PlayerStruct>
 
 export function createRenderPlayerSystem(world: World) {
   const playerBuffer = world.root.createBuffer(PlayerStruct).$usage('uniform')
@@ -50,30 +57,29 @@ export function createRenderPlayerSystem(world: World) {
         world.camera.buffer.as('uniform'),
         playerBuffer.as('uniform'),
       ),
-      {
-        color: {
-          format: presentationFormat,
-          blend: blending.normal,
-        },
-      },
+      { color: { format: presentationFormat, blend: blending.normal } },
     )
     .withDepthStencil({
       format: depthFormat,
       depthWriteEnabled: true,
       depthCompare: 'less',
     })
-    .withPrimitive({
-      topology: 'triangle-list',
-      cullMode: 'back',
-    })
+    .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
     .withMultisample({ count: sampleCount })
     .createPipeline()
 
   function render(world: World) {
-    const player = query(world, [Player, Position])[0]
+    const player = query(world, [Player, Position, Velocity])[0]
+    const vel = Velocity[player]
+
+    const transform = mat4x4f
+      .translation(vec3f(Position[player], 0))
+      .mul(mat4x4f.rotationZ(Math.atan2(vel.y, vel.x)))
 
     playerBuffer.write({
       position: Position[player],
+      transform,
+      inverseTransform: mat4.invert(transform, mat4x4f()),
     })
 
     renderPipeline
@@ -103,19 +109,15 @@ function createVertexProgram(
   return tgpu['~unstable'].vertexFn({
     in: { idx: builtin.vertexIndex },
     out: {
-      localPos: vec3f,
       worldPos: vec3f,
       clipPos: builtin.position,
     },
   })(({ idx }) => {
-    const localPos = cubeVertices.$[idx]
-    const worldPos = localPos
-      .mul(SIZE / 2)
-      .add(vec3f(playerBuffer.$.position, SIZE / 2))
-    const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
+    const localPos = cubeVertices.$[idx].mul(SIZE / 2)
+    const worldPos = playerBuffer.$.transform.mul(vec4f(localPos, 1))
+    const clipPos = cameraBuffer.$.viewMatrix.mul(worldPos)
     return {
-      localPos,
-      worldPos,
+      worldPos: worldPos.xyz,
       clipPos,
     }
   })
@@ -126,45 +128,74 @@ function createFragmentProgram(
   playerBuffer: TgpuBufferUniform<typeof PlayerStruct>,
 ) {
   return tgpu['~unstable'].fragmentFn({
-    in: { localPos: vec3f, worldPos: vec3f },
+    in: { worldPos: vec3f },
     out: { color: vec4f, depth: builtin.fragDepth },
-  })(({ localPos, worldPos }) => {
-    const hit = raymarch(
-      cameraBuffer.$.pos,
-      worldPos,
-      vec3f(playerBuffer.$.position, SIZE / 2),
-    )
-    // if (!hit.hit) return { color: vec4f(0.1), depth: 0 } // debug
+  })(({ worldPos }) => {
+    const hit = raymarch(cameraBuffer.$.pos, worldPos, playerBuffer.$)
+
+    if (DEBUG && !hit.hit) return { color: vec4f(1, 0, 1, 1), depth: 0 }
     if (!hit.hit) return { color: vec4f(0), depth: 1 }
 
     const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
 
     return {
-      color: vec4f(vec3f(0, smoothstep(-0.1, SIZE + 0.1, hit.pos.z), 0), 1),
+      color: vec4f(vec3f(0, abs(fract(hit.pos.z * 50) - 0.5) + 0.5, 0), 1),
       depth: hitClipPos.z / hitClipPos.w,
     }
   })
 }
 
-function scene(p: v3f, playerPos: v3f): number {
+function scene(p: v3f, player: PlayerStruct): number {
   'use gpu'
-  const centeredP = playerPos.sub(p)
+  const centeredP = player.inverseTransform.mul(vec4f(p, 1)).xyz
 
   let dist = f32(1e9)
+  // frame
+  // dist = opUnion(dist, sdBoxFrame3d(centeredP, vec3f(SIZE / 2), SIZE * 0.005))
+
+  // Head
   dist = opUnion(
     dist,
-    sdBoxFrame3d(centeredP, vec3f((SIZE / 2) * 0.9), SIZE * 0.015),
+    sdSphere(centeredP.sub(vec3f(SIZE * 0.2, 0, 0)), SIZE * 0.2),
   )
-  dist = opUnion(dist, sdTorus(centeredP, SIZE * 0.3, SIZE * 0.05))
+
+  // Torso
+  dist = opSmoothUnion(
+    dist,
+    sdSphere(centeredP.sub(vec3f(-SIZE * 0.07, 0, 0)), SIZE * 0.125),
+    SIZE * 0.05,
+  )
+
+  // Tail
+  dist = opSmoothUnion(
+    dist,
+    sdCapsule(
+      centeredP,
+      vec3f(-SIZE * 0.4, 0, 0),
+      vec3f(SIZE * 0.4, 0, 0),
+      SIZE * 0.02,
+    ),
+    SIZE * 0.2,
+  )
+
+  // wings
+  dist = opSmoothUnion(
+    dist,
+    sdCapsule(
+      centeredP,
+      vec3f(SIZE * 0.2, -SIZE * 0.4, 0),
+      vec3f(SIZE * 0.2, SIZE * 0.4, 0),
+      SIZE * 0.03,
+    ),
+    SIZE * 0.2,
+  )
   return dist
 }
 
-const Hit = struct({ hit: bool, pos: vec3f, totalDistance: f32 })
-function raymarch(
-  cameraPos: v3f,
-  worldPos: v3f,
-  playerPos: v3f,
-): Infer<typeof Hit> {
+const Hit = struct({ hit: bool, pos: vec3f })
+type Hit = Infer<typeof Hit>
+
+function raymarch(cameraPos: v3f, worldPos: v3f, player: PlayerStruct): Hit {
   'use gpu'
 
   const MAX_DISTANCE = f32(100)
@@ -177,13 +208,13 @@ function raymarch(
 
   for (let i = 0; i < MAX_STEPS; i++) {
     const point = cameraPos.add(rayDirection.mul(totalDistance))
-    const distance = scene(point, playerPos)
+    const distance = scene(point, player)
 
-    if (distance < EPSILON) return Hit({ hit: true, pos: point, totalDistance })
+    if (distance < EPSILON) return Hit({ hit: true, pos: point })
     if (distance > MAX_DISTANCE) break
 
     totalDistance += distance
   }
 
-  return Hit({ hit: false, pos: vec3f(), totalDistance })
+  return Hit({ hit: false, pos: vec3f() })
 }

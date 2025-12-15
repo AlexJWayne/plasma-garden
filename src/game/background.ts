@@ -1,6 +1,6 @@
 import { type TgpuBufferUniform, tgpu } from 'typegpu'
 import { builtin, vec2f, vec3f, vec4f } from 'typegpu/data'
-import { abs, fract, min, smoothstep } from 'typegpu/std'
+import { abs, discard, fract, min, smoothstep } from 'typegpu/std'
 
 import { quadVertices } from '../lib/geometry'
 import type { World } from '../main'
@@ -31,8 +31,8 @@ export function createRenderBackgroundSystem(world: World) {
       .withDepthStencilAttachment({
         view: world.depthTexture.createView(),
         depthLoadOp: 'clear',
-        depthClearValue: 1.0,
         depthStoreOp: 'store',
+        depthClearValue: 1.0,
       })
       .draw(6)
   }
@@ -67,6 +67,8 @@ function createFragmentProgram() {
     const line = abs(grid.sub(0.5))
     const d = min(line.x, line.y)
     const v = smoothstep(0.1, 0, d)
-    return vec4f(vec3f(v * 0.2), 1)
+    if (v < 0.75) discard()
+
+    return vec4f(vec3f(0.2), 1)
   })
 }

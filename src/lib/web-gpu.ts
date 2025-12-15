@@ -1,5 +1,3 @@
-import type { TgpuRenderPipeline } from 'typegpu'
-
 export const blending = {
   // premultiplied alpha
   normal: {

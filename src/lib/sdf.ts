@@ -1,4 +1,4 @@
-import type { v2f, v3f } from 'typegpu/data'
+import type { v3f } from 'typegpu/data'
 import { vec2f } from 'typegpu/data'
 import { length } from 'typegpu/std'
 
