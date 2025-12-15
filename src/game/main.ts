@@ -18,10 +18,11 @@ export function startGame(world: World) {
   const renderBackgroundSystem = createRenderBackgroundSystem(world)
   const renderBulletSystem = createRenderBulletSystem(world)
 
-  let lastTime = 0
-  function tick(time: number) {
-    world.delta = (time - lastTime) / 1000
-    lastTime = time
+  let lastTimeMs = 0
+  function tick(timeMs: number) {
+    world.delta = (timeMs - lastTimeMs) / 1000
+    world.time = timeMs / 1000
+    lastTimeMs = timeMs
 
     applyMovementInputToPlayer(world)
     physicsSystem(world)
@@ -39,7 +40,7 @@ export function startGame(world: World) {
   requestAnimationFrame(tick)
 
   // TEMP
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 100; i++) {
     createBullet(
       world,
       vec2f(0, 0),

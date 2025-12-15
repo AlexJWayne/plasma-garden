@@ -15,6 +15,7 @@ const world = createWorld({
   colorTexture,
   camera: setupCamera(root),
   input: setupInput(),
+  time: 0,
   delta: 0,
 })
 export type World = typeof world

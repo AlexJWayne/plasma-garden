@@ -108,7 +108,7 @@ function createVertexProgram(
     },
   })(({ idx, pos }) => {
     const uv = quadVertices.$[idx]
-    const outPos = vec3f(uv.mul(0.01).add(pos), 0.05)
+    const outPos = vec3f(uv.mul(0.01).add(pos), 0.01)
     return {
       pos: cameraBuffer.$.viewMatrix.mul(vec4f(outPos, 1)),
       uv,
@@ -122,6 +122,6 @@ function createFragmentProgram() {
     out: vec4f,
   })(({ uv }) => {
     let v = smoothstep(1, 0.6, length(uv))
-    return vec4f(vec3f(1, 0, 0).mul(v), v)
+    return vec4f(vec3f(0.2, 0.1, 1).mul(v), v)
   })
 }

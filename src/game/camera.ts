@@ -16,7 +16,7 @@ export const projection = mat4.perspective(
   mat4x4f(),
 )
 
-const offset = vec3f(0, -0.5, 0.5)
+const offset = vec3f(0, -0.5, 0.65)
 const up = vec3f(0, 0, 1)
 
 export const CameraStruct = struct({

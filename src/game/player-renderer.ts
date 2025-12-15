@@ -20,7 +20,7 @@ import {
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import { abs, fract, length, normalize } from 'typegpu/std'
+import { abs, fract, length, normalize, sin } from 'typegpu/std'
 import { mat4 } from 'wgpu-matrix'
 
 import { cubeVertices } from '../lib/geometry'
@@ -35,6 +35,7 @@ import { SIZE } from './player'
 const DEBUG = false
 
 const PlayerStruct = struct({
+  time: f32,
   position: vec2f,
   transform: mat4x4f,
   inverseTransform: mat4x4f,
@@ -77,6 +78,7 @@ export function createRenderPlayerSystem(world: World) {
       .mul(mat4x4f.rotationZ(Math.atan2(vel.y, vel.x)))
 
     playerBuffer.write({
+      time: world.time,
       position: Position[player],
       transform,
       inverseTransform: mat4.invert(transform, mat4x4f()),
@@ -131,7 +133,12 @@ function createFragmentProgram(
     in: { worldPos: vec3f },
     out: { color: vec4f, depth: builtin.fragDepth },
   })(({ worldPos }) => {
-    const hit = raymarch(cameraBuffer.$.pos, worldPos, playerBuffer.$)
+    const hit = raymarch(
+      cameraBuffer.$.pos,
+      worldPos,
+      playerBuffer.$,
+      playerBuffer.$.time,
+    )
 
     if (DEBUG && !hit.hit) return { color: vec4f(1, 0, 1, 1), depth: 0 }
     if (!hit.hit) return { color: vec4f(0), depth: 1 }
@@ -145,7 +152,7 @@ function createFragmentProgram(
   })
 }
 
-function scene(p: v3f, player: PlayerStruct): number {
+function scene(p: v3f, player: PlayerStruct, time: number): number {
   'use gpu'
   const centeredP = player.inverseTransform.mul(vec4f(p, 1)).xyz
 
@@ -162,7 +169,16 @@ function scene(p: v3f, player: PlayerStruct): number {
   // Torso
   dist = opSmoothUnion(
     dist,
-    sdSphere(centeredP.sub(vec3f(-SIZE * 0.07, 0, 0)), SIZE * 0.125),
+    sdSphere(
+      centeredP.sub(
+        vec3f(
+          -SIZE * 0.05, //
+          sin(time * 3) * SIZE * 0.07,
+          0,
+        ),
+      ),
+      SIZE * 0.125,
+    ),
     SIZE * 0.05,
   )
 
@@ -195,7 +211,12 @@ function scene(p: v3f, player: PlayerStruct): number {
 const Hit = struct({ hit: bool, pos: vec3f })
 type Hit = Infer<typeof Hit>
 
-function raymarch(cameraPos: v3f, worldPos: v3f, player: PlayerStruct): Hit {
+function raymarch(
+  cameraPos: v3f,
+  worldPos: v3f,
+  player: PlayerStruct,
+  time: number,
+): Hit {
   'use gpu'
 
   const MAX_DISTANCE = f32(100)
@@ -208,7 +229,7 @@ function raymarch(cameraPos: v3f, worldPos: v3f, player: PlayerStruct): Hit {
 
   for (let i = 0; i < MAX_STEPS; i++) {
     const point = cameraPos.add(rayDirection.mul(totalDistance))
-    const distance = scene(point, player)
+    const distance = scene(point, player, time)
 
     if (distance < EPSILON) return Hit({ hit: true, pos: point })
     if (distance > MAX_DISTANCE) break
