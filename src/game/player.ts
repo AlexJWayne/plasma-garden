@@ -30,7 +30,7 @@ export function createPlayerEntity(world: World) {
   Velocity[eid] = vec2f(0)
   Acceleration[eid] = vec2f(0)
   MaxSpeed[eid] = 2
-  Drag[eid] = 1
+  Drag[eid] = 0.5
 
   return eid
 }
@@ -48,4 +48,6 @@ export function applyMovementInputToPlayer(world: World) {
 
   const player = query(world, [Player, Velocity, Acceleration])[0]
   Acceleration[player] = direction.mul(force * world.delta)
+
+  console.log(Position[player].x)
 }

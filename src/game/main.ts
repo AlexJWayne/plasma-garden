@@ -40,11 +40,11 @@ export function startGame(world: World) {
   requestAnimationFrame(tick)
 
   // TEMP
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 50; i++) {
     createBullet(
       world,
       vec2f(0, 0),
-      normalize(vec2f(Math.random() * 2 - 1, Math.random() * 2 - 1)).mul(0.2),
+      vec2f(Math.random() * 2 - 1, Math.random() * 2 - 1).mul(0.2),
       10,
     )
   }

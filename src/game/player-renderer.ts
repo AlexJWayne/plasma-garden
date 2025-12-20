@@ -1,11 +1,4 @@
-import {
-  opSmoothUnion,
-  opUnion,
-  sdBox3d,
-  sdBoxFrame3d,
-  sdCapsule,
-  sdSphere,
-} from '@typegpu/sdf'
+import { opSmoothUnion, opUnion, sdCapsule, sdSphere } from '@typegpu/sdf'
 import { query } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
@@ -146,7 +139,15 @@ function createFragmentProgram(
     const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
 
     return {
-      color: vec4f(vec3f(0, abs(fract(hit.pos.z * 50) - 0.5) + 0.5, 0), 1),
+      color: vec4f(
+        vec3f(
+          0,
+          abs(fract((hit.pos.z + playerBuffer.$.time * 0.005) * 50) - 0.5) +
+            0.5,
+          0,
+        ),
+        1,
+      ),
       depth: hitClipPos.z / hitClipPos.w,
     }
   })
@@ -189,7 +190,7 @@ function scene(p: v3f, player: PlayerStruct, time: number): number {
       centeredP,
       vec3f(-SIZE * 0.4, 0, 0),
       vec3f(SIZE * 0.4, 0, 0),
-      SIZE * 0.02,
+      SIZE * 0.01,
     ),
     SIZE * 0.2,
   )
@@ -201,7 +202,7 @@ function scene(p: v3f, player: PlayerStruct, time: number): number {
       centeredP,
       vec3f(SIZE * 0.2, -SIZE * 0.4, 0),
       vec3f(SIZE * 0.2, SIZE * 0.4, 0),
-      SIZE * 0.03,
+      SIZE * 0.05,
     ),
     SIZE * 0.2,
   )
