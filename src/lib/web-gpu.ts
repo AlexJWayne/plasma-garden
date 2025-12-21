@@ -1,5 +1,5 @@
 import type { World } from '../main'
-import { depthFormat, presentationFormat, sampleCount } from '../setup-webgpu'
+import { depthFormat } from '../setup-webgpu'
 
 export const blending = {
   // premultiplied alpha

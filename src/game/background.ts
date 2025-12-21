@@ -3,7 +3,11 @@ import { builtin, vec2f, vec3f, vec4f } from 'typegpu/data'
 import { abs, discard, fract, min, smoothstep } from 'typegpu/std'
 
 import { quadVertices } from '../lib/geometry'
-import { createColorAttachment, depthStencil } from '../lib/web-gpu'
+import {
+  createColorAttachment,
+  createDepthAttachment,
+  depthStencil,
+} from '../lib/web-gpu'
 import type { World } from '../main'
 import { presentationFormat, sampleCount } from '../setup-webgpu'
 
@@ -24,10 +28,9 @@ export function createRenderBackgroundSystem(world: World) {
         loadOp: 'clear',
       })
       .withDepthStencilAttachment({
-        view: world.depthTexture.createView(),
+        ...createDepthAttachment(world),
         depthLoadOp: 'clear',
-        depthStoreOp: 'store',
-        depthClearValue: 1.0,
+        depthClearValue: 1,
       })
       .draw(6)
   }

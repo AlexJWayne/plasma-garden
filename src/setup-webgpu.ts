@@ -1,4 +1,6 @@
-import tgpu from 'typegpu'
+import tgpu, { type TgpuRoot } from 'typegpu'
+
+import type { World } from './main'
 
 export const presentationFormat = navigator.gpu.getPreferredCanvasFormat()
 export const depthFormat: GPUTextureFormat = 'depth24plus'
@@ -10,10 +12,7 @@ export const sampleCount = 4
 
 export async function setupWebgpu() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
-  canvas.width = window.innerWidth * supersampling
-  canvas.height = window.innerHeight * supersampling
-  canvas.style.width = `${window.innerWidth}px`
-  canvas.style.height = `${window.innerHeight}px`
+  setCanvasSize(canvas)
 
   const ctx = canvas.getContext('webgpu')
   if (!ctx) {
@@ -34,19 +33,55 @@ export async function setupWebgpu() {
     alphaMode: 'premultiplied',
   })
 
-  const depthTexture = root.device.createTexture({
-    size: [canvas.width, canvas.height],
-    format: depthFormat,
-    usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    sampleCount,
-  })
-
-  const colorTexture = root.device.createTexture({
-    size: [canvas.width, canvas.height],
-    format: presentationFormat,
-    usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    sampleCount,
+  const { depthTexture, colorTexture } = createRenderTextures(root, {
+    width: canvas.width,
+    height: canvas.height,
   })
 
   return { canvas, ctx, root, depthTexture, colorTexture }
+}
+
+export function listenForResize(world: World) {
+  window.addEventListener('resize', () => {
+    const { width, height } = setCanvasSize(world.canvas)
+
+    const { depthTexture, colorTexture } = createRenderTextures(world.root, {
+      width: width,
+      height: height,
+    })
+
+    world.colorTexture = colorTexture
+    world.depthTexture = depthTexture
+  })
+}
+
+function setCanvasSize(canvas: HTMLCanvasElement): {
+  width: number
+  height: number
+} {
+  canvas.width = window.innerWidth * supersampling
+  canvas.height = window.innerHeight * supersampling
+  canvas.style.width = `${window.innerWidth}px`
+  canvas.style.height = `${window.innerHeight}px`
+  return { width: canvas.width, height: canvas.height }
+}
+
+function createRenderTextures(
+  root: TgpuRoot,
+  { width, height }: { width: number; height: number },
+) {
+  return {
+    depthTexture: root.device.createTexture({
+      size: [width, height],
+      format: depthFormat,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      sampleCount,
+    }),
+    colorTexture: root.device.createTexture({
+      size: [width, height],
+      format: presentationFormat,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      sampleCount,
+    }),
+  }
 }

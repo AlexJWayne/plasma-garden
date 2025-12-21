@@ -2,6 +2,7 @@ import { vec2f } from 'typegpu/data'
 
 import { setKeyStateSystem } from '../input'
 import type { World } from '../main'
+import { listenForResize } from '../setup-webgpu'
 
 import { createRenderBackgroundSystem } from './background'
 import { createRenderBulletSystem } from './bullet'
@@ -12,6 +13,8 @@ import { applyMovementInputToPlayer, createPlayerEntity } from './player'
 import { createRenderPlayerSystem } from './player-renderer'
 
 export function startGame(world: World) {
+  listenForResize(world)
+
   createPlayerEntity(world)
   createMushroom(world, vec2f(-1, -1))
 
@@ -33,7 +36,7 @@ export function startGame(world: World) {
 
     positionCameraSystem(world)
     renderBackgroundSystem(world)
-    renderPlayerSystem(world)
+    // renderPlayerSystem(world)
     renderBulletSystem(world)
     renderMushroomSystem(world)
 
