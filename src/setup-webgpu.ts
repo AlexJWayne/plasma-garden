@@ -4,17 +4,16 @@ export const presentationFormat = navigator.gpu.getPreferredCanvasFormat()
 export const depthFormat: GPUTextureFormat = 'depth24plus'
 
 const supersampling = 2
-const canvasSize = 1000
 
 // MSAA sample count: 1 (disabled), 4 (recommended), or 8 (high quality)
 export const sampleCount = 4
 
 export async function setupWebgpu() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
-  canvas.width = canvasSize * supersampling
-  canvas.height = canvasSize * supersampling
-  canvas.style.width = `${canvasSize}px`
-  canvas.style.height = `${canvasSize}px`
+  canvas.width = window.innerWidth * supersampling
+  canvas.height = window.innerHeight * supersampling
+  canvas.style.width = `${window.innerWidth}px`
+  canvas.style.height = `${window.innerHeight}px`
 
   const ctx = canvas.getContext('webgpu')
   if (!ctx) {

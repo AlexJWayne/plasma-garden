@@ -1,4 +1,10 @@
-import { opSmoothUnion, opUnion, sdCapsule, sdSphere } from '@typegpu/sdf'
+import {
+  opSmoothUnion,
+  opUnion,
+  sdBoxFrame3d,
+  sdCapsule,
+  sdSphere,
+} from '@typegpu/sdf'
 import { query } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
@@ -17,9 +23,14 @@ import { abs, fract, length, normalize, sin } from 'typegpu/std'
 import { mat4 } from 'wgpu-matrix'
 
 import { cubeVertices } from '../lib/geometry'
-import { blending } from '../lib/web-gpu'
+import {
+  blending,
+  createColorAttachment,
+  createDepthAttachment,
+  depthStencil,
+} from '../lib/web-gpu'
 import type { World } from '../main'
-import { depthFormat, presentationFormat, sampleCount } from '../setup-webgpu'
+import { presentationFormat, sampleCount } from '../setup-webgpu'
 
 import type { CameraStruct } from './camera'
 import { Player, Position, Velocity } from './components'
@@ -53,11 +64,7 @@ export function createRenderPlayerSystem(world: World) {
       ),
       { color: { format: presentationFormat, blend: blending.normal } },
     )
-    .withDepthStencil({
-      format: depthFormat,
-      depthWriteEnabled: true,
-      depthCompare: 'less',
-    })
+    .withDepthStencil(depthStencil)
     .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
     .withMultisample({ count: sampleCount })
     .createPipeline()
@@ -78,19 +85,8 @@ export function createRenderPlayerSystem(world: World) {
     })
 
     renderPipeline
-      .withColorAttachment({
-        color: {
-          view: world.colorTexture.createView(),
-          resolveTarget: world.ctx.getCurrentTexture().createView(),
-          loadOp: 'load',
-          storeOp: 'store',
-        },
-      })
-      .withDepthStencilAttachment({
-        view: world.depthTexture.createView(),
-        depthLoadOp: 'load',
-        depthStoreOp: 'store',
-      })
+      .withColorAttachment({ color: createColorAttachment(world) })
+      .withDepthStencilAttachment(createDepthAttachment(world))
       .draw(cubeVertices.value.length)
   }
 
@@ -159,7 +155,7 @@ function scene(p: v3f, player: PlayerStruct, time: number): number {
 
   let dist = f32(1e9)
   // frame
-  // dist = opUnion(dist, sdBoxFrame3d(centeredP, vec3f(SIZE / 2), SIZE * 0.005))
+  dist = opUnion(dist, sdBoxFrame3d(centeredP, vec3f(SIZE / 2), SIZE * 0.005))
 
   // Head
   dist = opUnion(

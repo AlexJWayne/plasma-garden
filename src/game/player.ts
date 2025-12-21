@@ -13,7 +13,7 @@ import {
   Velocity,
 } from './components'
 
-export const SIZE = 0.2
+export const SIZE = 1
 
 export function createPlayerEntity(world: World) {
   const eid = addEntity(

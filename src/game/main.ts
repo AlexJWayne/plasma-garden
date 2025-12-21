@@ -1,22 +1,24 @@
 import { vec2f } from 'typegpu/data'
-import { normalize } from 'typegpu/std'
 
 import { setKeyStateSystem } from '../input'
 import type { World } from '../main'
 
 import { createRenderBackgroundSystem } from './background'
-import { createBullet, createRenderBulletSystem } from './bullet'
+import { createRenderBulletSystem } from './bullet'
 import { positionCameraSystem } from './camera'
+import { createMushroom, createRenderMushroomSystem } from './mushroom'
 import { physicsSystem } from './physics'
 import { applyMovementInputToPlayer, createPlayerEntity } from './player'
 import { createRenderPlayerSystem } from './player-renderer'
 
 export function startGame(world: World) {
   createPlayerEntity(world)
+  createMushroom(world, vec2f(-1, -1))
 
   const renderPlayerSystem = createRenderPlayerSystem(world)
   const renderBackgroundSystem = createRenderBackgroundSystem(world)
   const renderBulletSystem = createRenderBulletSystem(world)
+  const renderMushroomSystem = createRenderMushroomSystem(world)
 
   let lastTimeMs = 0
   function tick(timeMs: number) {
@@ -33,19 +35,10 @@ export function startGame(world: World) {
     renderBackgroundSystem(world)
     renderPlayerSystem(world)
     renderBulletSystem(world)
+    renderMushroomSystem(world)
 
     requestAnimationFrame(tick)
   }
 
   requestAnimationFrame(tick)
-
-  // TEMP
-  for (let i = 0; i < 50; i++) {
-    createBullet(
-      world,
-      vec2f(0, 0),
-      vec2f(Math.random() * 2 - 1, Math.random() * 2 - 1).mul(0.2),
-      10,
-    )
-  }
 }

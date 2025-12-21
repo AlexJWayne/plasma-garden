@@ -13,26 +13,27 @@ export function physicsSystem(world: World) {
   applyDragSystem(world)
 }
 
+const BOUNDARY = 10
 function bounceOffBoundariesSystem(world: World) {
   for (const eid of query(world, [Position, Velocity])) {
     const pos = Position[eid]
     const vel = Velocity[eid]
 
-    if (pos.x > 1) {
+    if (pos.x > BOUNDARY) {
       vel.x = -Math.abs(vel.x)
-      pos.x = 1
+      pos.x = BOUNDARY
     }
-    if (pos.y > 1) {
+    if (pos.y > BOUNDARY) {
       vel.y = -Math.abs(vel.y)
-      pos.y = 1
+      pos.y = BOUNDARY
     }
-    if (pos.x < -1) {
+    if (pos.x < -BOUNDARY) {
       vel.x = Math.abs(vel.x)
-      pos.x = -1
+      pos.x = -BOUNDARY
     }
-    if (pos.y < -1) {
+    if (pos.y < -BOUNDARY) {
       vel.y = Math.abs(vel.y)
-      pos.y = -1
+      pos.y = -BOUNDARY
     }
   }
 }

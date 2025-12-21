@@ -3,8 +3,9 @@ import { builtin, vec2f, vec3f, vec4f } from 'typegpu/data'
 import { abs, discard, fract, min, smoothstep } from 'typegpu/std'
 
 import { quadVertices } from '../lib/geometry'
+import { createColorAttachment, depthStencil } from '../lib/web-gpu'
 import type { World } from '../main'
-import { depthFormat, presentationFormat, sampleCount } from '../setup-webgpu'
+import { presentationFormat, sampleCount } from '../setup-webgpu'
 
 import { CameraStruct } from './camera'
 
@@ -12,21 +13,15 @@ export function createRenderBackgroundSystem(world: World) {
   const renderPipeline = world.root['~unstable']
     .withVertex(createVertexProgram(world.camera.buffer.as('uniform')), {})
     .withFragment(createFragmentProgram(), { format: presentationFormat })
-    .withDepthStencil({
-      format: depthFormat,
-      depthWriteEnabled: true,
-      depthCompare: 'less',
-    })
+    .withDepthStencil(depthStencil)
     .withMultisample({ count: sampleCount })
     .createPipeline()
 
   function render(world: World) {
     renderPipeline
       .withColorAttachment({
-        view: world.colorTexture.createView(),
-        resolveTarget: world.ctx.getCurrentTexture().createView(),
+        ...createColorAttachment(world),
         loadOp: 'clear',
-        storeOp: 'store',
       })
       .withDepthStencilAttachment({
         view: world.depthTexture.createView(),
@@ -52,7 +47,7 @@ function createVertexProgram(
   })(({ idx }) => {
     const uv = quadVertices.$[idx]
     return {
-      pos: cameraBuffer.$.viewMatrix.mul(vec4f(uv, 0, 1)),
+      pos: cameraBuffer.$.viewMatrix.mul(vec4f(uv.mul(10), 0, 1)),
       uv,
     }
   })

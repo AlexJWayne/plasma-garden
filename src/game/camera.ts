@@ -1,6 +1,6 @@
 import { query } from 'bitecs'
 import { type TgpuRoot } from 'typegpu'
-import { mat4x4f, struct, vec3f } from 'typegpu/data'
+import { f32, mat4x4f, struct, vec3f } from 'typegpu/data'
 import { mat4 } from 'wgpu-matrix'
 
 import { lookAt } from '../lib/matrix'
@@ -8,20 +8,17 @@ import type { World } from '../main'
 
 import { Player, Position } from './components'
 
-export const projection = mat4.perspective(
-  (60 * Math.PI) / 180, // fov
-  1, // aspect
-  0.1, // near
-  100, // far
-  mat4x4f(),
-)
+const FOV = (60 * Math.PI) / 180
+const NEAR = 0.1
+const FAR = 100
 
-const offset = vec3f(0, -0.5, 0.65)
-const up = vec3f(0, 0, 1)
+const OFFSET = vec3f(0, -4, 6)
+const UP = vec3f(0, 0, 1)
 
 export const CameraStruct = struct({
   viewMatrix: mat4x4f,
   pos: vec3f,
+  targetPos: vec3f,
 })
 
 export function setupCamera(root: TgpuRoot) {
@@ -39,8 +36,20 @@ export function positionCameraSystem(world: World) {
   camera.target.current = camera.target.current.add(
     playerPos.sub(camera.target.current).mul(10 * world.delta),
   )
-  const pos = camera.target.current.add(offset)
+  const pos = camera.target.current.add(OFFSET)
 
-  const viewMatrix = projection.mul(lookAt(pos, camera.target.current, up))
-  camera.buffer.write({ viewMatrix, pos })
+  const projection = mat4.perspective(
+    FOV,
+    world.canvas.width / world.canvas.height,
+    NEAR,
+    FAR,
+    mat4x4f(),
+  )
+
+  const viewMatrix = projection.mul(lookAt(pos, camera.target.current, UP))
+  camera.buffer.write({
+    viewMatrix,
+    pos,
+    targetPos: camera.target.current,
+  })
 }
