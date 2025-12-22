@@ -18,10 +18,17 @@ export function startGame(world: World) {
 
   createPlayerEntity(world)
 
-  createMushroom(world, vec2f(-1, -1), 1.5)
-  createMushroom(world, vec2f(1, -1), 2)
-  createMushroom(world, vec2f(2, 0), 1)
-  createMushroom(world, vec2f(-1, -2), 3)
+  for (let i = 0; i < 30; i++) {
+    createMushroom(
+      world,
+      vec2f(
+        (Math.random() * 2 - 1) * 5, //
+        (Math.random() * 2 - 1) * 5,
+      ),
+      Math.random() * 1.5 + 0.5,
+      Math.floor(Math.random() * 8) + 3,
+    )
+  }
 
   const renderPlayerSystem = createRenderPlayerSystem(world)
   const renderBackgroundSystem = createRenderBackgroundSystem(world)
@@ -38,7 +45,7 @@ export function startGame(world: World) {
 
     positionCameraSystem(world)
     renderBackgroundSystem(world)
-    renderPlayerSystem(world)
+    // renderPlayerSystem(world)
     renderBulletSystem(world)
     renderMushroomSystem(world)
 

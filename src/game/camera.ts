@@ -12,7 +12,7 @@ const FOV = (60 * Math.PI) / 180
 const NEAR = 0.1
 const FAR = 100
 
-const OFFSET = vec3f(0, -4, 4)
+const OFFSET = vec3f(0, -5, 4)
 const UP = vec3f(0, 0, 1)
 
 export const CameraStruct = struct({

@@ -19,10 +19,24 @@ import {
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import { fract, length, normalize } from 'typegpu/std'
+import {
+  abs,
+  atan2,
+  dot,
+  fract,
+  length,
+  max,
+  normalize,
+  pow,
+  reflect,
+  sin,
+  smoothstep,
+} from 'typegpu/std'
 
 import { createInstanceBuffer } from '../lib/buffers'
 import { cubeVertices } from '../lib/geometry'
+import { hsl2rgb } from '../lib/hsl'
+import { rotate2d } from '../lib/transform'
 import {
   blending,
   createColorAttachment,
@@ -40,18 +54,26 @@ const DEBUG = false
 
 type Mushroom = {
   height: number
+  lobes: number
 }
 const Mushroom = [] as Mushroom[]
 
 const MushroomStruct = struct({
-  pos: vec2f,
+  pos: vec3f,
   height: f32,
+  lobes: f32,
 })
+type MushroomStruct = Infer<typeof MushroomStruct>
 
-export function createMushroom(world: World, pos: v2f, height: number) {
+export function createMushroom(
+  world: World,
+  pos: v2f,
+  height: number,
+  lobes: number,
+) {
   const eid = addEntity(world, Position, Mushroom)
   Position[eid] = pos
-  Mushroom[eid] = { height }
+  Mushroom[eid] = { height, lobes }
 }
 
 export function createRenderMushroomSystem(world: World) {
@@ -92,8 +114,9 @@ export function createRenderMushroomSystem(world: World) {
       [...mushrooms].map((eid, idx) => ({
         idx,
         value: {
-          pos: Position[eid],
+          pos: vec3f(Position[eid], 0),
           height: Mushroom[eid].height,
+          lobes: Mushroom[eid].lobes,
         },
       })),
     )
@@ -115,6 +138,7 @@ function createVertexProgram(
       idx: builtin.vertexIndex,
       pos: vec2f,
       height: f32,
+      lobes: f32,
     },
     out: {
       localPos: vec3f,
@@ -122,8 +146,9 @@ function createVertexProgram(
       clipPos: builtin.position,
       entityPos: vec3f,
       height: f32,
+      lobes: f32,
     },
-  })(({ idx, pos, height }) => {
+  })(({ idx, pos, height, lobes }) => {
     let localPos = cubeVertices.$[idx].mul(0.5)
     localPos.z += 0.5
     localPos.z *= height
@@ -134,9 +159,10 @@ function createVertexProgram(
     return {
       localPos,
       worldPos,
-      height,
       clipPos,
       entityPos,
+      height,
+      lobes,
     }
   })
 }
@@ -145,40 +171,52 @@ function createFragmentProgram(
   timeBuffer: TgpuBufferUniform<typeof TimeStruct>,
   cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
 ) {
+  const MAX_DISTANCE = f32(100)
+  const MAX_STEPS = 100
+  const EPSILON = 0.0001
+
   const Hit = struct({ hit: bool, pos: vec3f })
   type Hit = Infer<typeof Hit>
 
   const main = tgpu['~unstable'].fragmentFn({
     in: {
-      localPos: vec3f,
       worldPos: vec3f,
       entityPos: vec3f,
       height: f32,
+      lobes: f32,
     },
     out: { color: vec4f, depth: builtin.fragDepth },
-  })(({ localPos, worldPos, entityPos, height }) => {
-    const hit = raymarch(worldPos, entityPos, height)
+  })(({ worldPos, entityPos, height, lobes }) => {
+    const mushroom = MushroomStruct({
+      pos: entityPos,
+      height,
+      lobes,
+    })
+
+    const hit = raymarch(worldPos, entityPos, mushroom)
 
     if (DEBUG && !hit.hit)
       return { color: vec4f(1, 0, 1, 1).mul(0.25), depth: 0 }
     if (!hit.hit) return { color: vec4f(0), depth: 1 }
 
     const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
+
+    const normal = calcNormal(hit.pos, entityPos, mushroom)
+    const diffuseValue = calcLighting(normal)
+    const color = calcColor(diffuseValue, 0.2, hit.pos, mushroom)
+
     return {
-      color: vec4f(
-        fract(vec3f(hit.pos.z + timeBuffer.$.elapsed * 0.05).mul(10)),
-        1,
-      ),
+      color: vec4f(color, 1),
       depth: hitClipPos.z / hitClipPos.w,
     }
   })
 
-  function raymarch(worldPos: v3f, entityPos: v3f, height: number): Hit {
+  function raymarch(
+    worldPos: v3f,
+    entityPos: v3f,
+    mushroom: MushroomStruct,
+  ): Hit {
     'use gpu'
-
-    const MAX_DISTANCE = f32(100)
-    const MAX_STEPS = 100
-    const EPSILON = 0.0001
 
     const triDiff = worldPos.sub(cameraBuffer.$.pos)
     let totalDistance = length(triDiff)
@@ -186,7 +224,7 @@ function createFragmentProgram(
 
     for (let i = 0; i < MAX_STEPS; i++) {
       const point = cameraBuffer.$.pos.add(rayDirection.mul(totalDistance))
-      const distance = scene(point, entityPos, height)
+      const distance = scene(point, entityPos, mushroom.height)
 
       if (distance < EPSILON) return Hit({ hit: true, pos: point })
       if (distance > MAX_DISTANCE) break
@@ -219,6 +257,78 @@ function createFragmentProgram(
     )
 
     return opUnion(stalk, cap)
+  }
+
+  function calcNormal(
+    p: v3f,
+    entityPos: v3f,
+    { height, lobes }: MushroomStruct,
+  ): v3f {
+    'use gpu'
+    const h = EPSILON
+    const k = vec2f(1, -1)
+    let normal = normalize(
+      k.xyy
+        .mul(scene(p.add(k.xyy.mul(h)), entityPos, height))
+        .add(
+          k.yyx
+            .mul(scene(p.add(k.yyx.mul(h)), entityPos, height))
+            .add(
+              k.yxy
+                .mul(scene(p.add(k.yxy.mul(h)), entityPos, height))
+                .add(k.xxx.mul(scene(p.add(k.xxx.mul(h)), entityPos, height))),
+            ),
+        ),
+    )
+
+    const angle = atan2(p.y - entityPos.y, p.x - entityPos.x)
+    normal = vec3f(rotate2d(normal.xy, sin(angle * lobes) * 0.3), normal.z)
+    return normal
+  }
+
+  function calcLighting(normal: v3f): number {
+    'use gpu'
+    const lightDir = normalize(vec3f(1, 0, 1))
+    const diffuse = max(dot(normal, lightDir), 0)
+    const specular = pow(
+      max(dot(reflect(lightDir, normal), lightDir.mul(-1)), 0),
+      32,
+    )
+    return diffuse * 0.5 + specular
+  }
+
+  function calcColor(
+    diffuse: number,
+    ambient: number,
+    hitPos: v3f,
+    mushroom: MushroomStruct,
+  ): v3f {
+    'use gpu'
+
+    const baseColor = vec3f(0.2, 0.3, 0.7)
+    const diffuseColor = baseColor.mul(ambient + (1 - ambient) * diffuse)
+
+    const angle = atan2(hitPos.y - mushroom.pos.y, hitPos.x - mushroom.pos.x)
+
+    let glowValue =
+      (hitPos.z + sin(angle * mushroom.lobes) * 0.01) * 3 +
+      timeBuffer.$.elapsed * 0.1
+    glowValue = abs(fract(glowValue) - 0.5) * 2
+
+    let glowWhiteValue = smoothstep(0.95, 1, glowValue)
+    glowValue = smoothstep(0.8, 1, glowValue)
+
+    const glowHue = fract(
+      hitPos.z +
+        mushroom.pos.x * 3.77 +
+        mushroom.pos.y * 5.37 +
+        timeBuffer.$.elapsed * 0.1,
+    )
+    const glowColor = hsl2rgb(vec3f(glowHue, 1, 0.6))
+      .mul(glowValue)
+      .add(vec3f(glowWhiteValue))
+
+    return diffuseColor.add(glowColor)
   }
 
   return main

@@ -156,7 +156,7 @@ function scene(p: v3f, player: PlayerStruct, time: number): number {
 
   let dist = f32(1e9)
   // frame
-  dist = opUnion(dist, sdBoxFrame3d(centeredP, vec3f(SIZE / 2), SIZE * 0.005))
+  // dist = opUnion(dist, sdBoxFrame3d(centeredP, vec3f(SIZE / 2), SIZE * 0.005))
 
   // Head
   dist = opUnion(
