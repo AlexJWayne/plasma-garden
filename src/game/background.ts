@@ -32,7 +32,7 @@ export function createRenderBackgroundSystem(world: World) {
         depthLoadOp: 'clear',
         depthClearValue: 1,
       })
-      .draw(6)
+      .draw(quadVertices.$.length)
   }
 
   return render

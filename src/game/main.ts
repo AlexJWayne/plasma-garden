@@ -17,7 +17,11 @@ export function startGame(world: World) {
   listenForResize(world)
 
   createPlayerEntity(world)
-  createMushroom(world, vec2f(-1, -1))
+
+  createMushroom(world, vec2f(-1, -1), 1.5)
+  createMushroom(world, vec2f(1, -1), 2)
+  createMushroom(world, vec2f(2, 0), 1)
+  createMushroom(world, vec2f(-1, -2), 3)
 
   const renderPlayerSystem = createRenderPlayerSystem(world)
   const renderBackgroundSystem = createRenderBackgroundSystem(world)
