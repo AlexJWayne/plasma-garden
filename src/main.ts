@@ -2,6 +2,7 @@ import { createWorld } from 'bitecs'
 
 import { setupCamera } from './game/camera'
 import { startGame } from './game/main'
+import { setupTime } from './game/time'
 import { setupInput } from './input'
 import { setupWebgpu } from './setup-webgpu'
 
@@ -15,8 +16,7 @@ const world = createWorld({
   colorTexture,
   camera: setupCamera(root),
   input: setupInput(),
-  time: 0,
-  delta: 0,
+  time: setupTime(root),
 })
 export type World = typeof world
 

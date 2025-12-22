@@ -35,11 +35,11 @@ import { presentationFormat, sampleCount } from '../setup-webgpu'
 import type { CameraStruct } from './camera'
 import { Player, Position, Velocity } from './components'
 import { SIZE } from './player'
+import type { TimeStruct } from './time'
 
 const DEBUG = false
 
 const PlayerStruct = struct({
-  time: f32,
   position: vec2f,
   transform: mat4x4f,
   inverseTransform: mat4x4f,
@@ -59,6 +59,7 @@ export function createRenderPlayerSystem(world: World) {
     )
     .withFragment(
       createFragmentProgram(
+        world.time.buffer.as('uniform'),
         world.camera.buffer.as('uniform'),
         playerBuffer.as('uniform'),
       ),
@@ -78,7 +79,6 @@ export function createRenderPlayerSystem(world: World) {
       .mul(mat4x4f.rotationZ(Math.atan2(vel.y, vel.x)))
 
     playerBuffer.write({
-      time: world.time,
       position: Position[player],
       transform,
       inverseTransform: mat4.invert(transform, mat4x4f()),
@@ -115,6 +115,7 @@ function createVertexProgram(
 }
 
 function createFragmentProgram(
+  timeBuffer: TgpuBufferUniform<typeof TimeStruct>,
   cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
   playerBuffer: TgpuBufferUniform<typeof PlayerStruct>,
 ) {
@@ -126,7 +127,7 @@ function createFragmentProgram(
       cameraBuffer.$.pos,
       worldPos,
       playerBuffer.$,
-      playerBuffer.$.time,
+      timeBuffer.$.elapsed,
     )
 
     if (DEBUG && !hit.hit) return { color: vec4f(1, 0, 1, 1), depth: 0 }
@@ -138,7 +139,7 @@ function createFragmentProgram(
       color: vec4f(
         vec3f(
           0,
-          abs(fract((hit.pos.z + playerBuffer.$.time * 0.005) * 50) - 0.5) +
+          abs(fract((hit.pos.z + timeBuffer.$.elapsed * 0.005) * 50) - 0.5) +
             0.5,
           0,
         ),

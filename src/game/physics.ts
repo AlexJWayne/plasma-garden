@@ -40,13 +40,13 @@ function bounceOffBoundariesSystem(world: World) {
 
 function accelerateSystem(world: World) {
   for (const eid of query(world, [Velocity, Acceleration])) {
-    Velocity[eid] = Velocity[eid].add(Acceleration[eid].mul(world.delta))
+    Velocity[eid] = Velocity[eid].add(Acceleration[eid].mul(world.time.delta))
   }
 }
 
 function moveByVelocitySystem(world: World) {
   for (const eid of query(world, [Position, Velocity])) {
-    Position[eid] = Position[eid].add(Velocity[eid].mul(world.delta))
+    Position[eid] = Position[eid].add(Velocity[eid].mul(world.time.delta))
   }
 }
 
@@ -60,6 +60,6 @@ function applyMaxSpeedSystem(world: World) {
 
 function applyDragSystem(world: World) {
   for (const eid of query(world, [Position, Velocity, Drag])) {
-    Velocity[eid] = Velocity[eid].mul(1 - Drag[eid] * world.delta)
+    Velocity[eid] = Velocity[eid].mul(1 - Drag[eid] * world.time.delta)
   }
 }

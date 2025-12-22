@@ -47,5 +47,5 @@ export function applyMovementInputToPlayer(world: World) {
   direction = length(direction) > 0 ? normalize(direction) : direction
 
   const player = query(world, [Player, Velocity, Acceleration])[0]
-  Acceleration[player] = direction.mul(force * world.delta)
+  Acceleration[player] = direction.mul(force * world.time.delta)
 }

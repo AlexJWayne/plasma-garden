@@ -11,6 +11,7 @@ import { createMushroom, createRenderMushroomSystem } from './mushroom'
 import { physicsSystem } from './physics'
 import { applyMovementInputToPlayer, createPlayerEntity } from './player'
 import { createRenderPlayerSystem } from './player-renderer'
+import { updateWorldTimeSystem } from './time'
 
 export function startGame(world: World) {
   listenForResize(world)
@@ -23,11 +24,8 @@ export function startGame(world: World) {
   const renderBulletSystem = createRenderBulletSystem(world)
   const renderMushroomSystem = createRenderMushroomSystem(world)
 
-  let lastTimeMs = 0
   function tick(timeMs: number) {
-    world.delta = (timeMs - lastTimeMs) / 1000
-    world.time = timeMs / 1000
-    lastTimeMs = timeMs
+    updateWorldTimeSystem(world, timeMs)
 
     applyMovementInputToPlayer(world)
     physicsSystem(world)
@@ -36,7 +34,7 @@ export function startGame(world: World) {
 
     positionCameraSystem(world)
     renderBackgroundSystem(world)
-    // renderPlayerSystem(world)
+    renderPlayerSystem(world)
     renderBulletSystem(world)
     renderMushroomSystem(world)
 

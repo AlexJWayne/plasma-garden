@@ -9,7 +9,7 @@ import {
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import { abs } from 'typegpu/std'
+import { abs, fract } from 'typegpu/std'
 
 import { createInstanceBuffer } from '../lib/buffers'
 import { cubeVertices } from '../lib/geometry'
@@ -24,6 +24,7 @@ import { presentationFormat, sampleCount } from '../setup-webgpu'
 
 import type { CameraStruct } from './camera'
 import { Position } from './components'
+import type { TimeStruct } from './time'
 
 type Mushroom = {
   height: number
@@ -53,7 +54,7 @@ export function createRenderMushroomSystem(world: World) {
       createVertexProgram(world.camera.buffer.as('uniform')),
       mushroomsLayout.attrib,
     )
-    .withFragment(createFragmentProgram(), {
+    .withFragment(createFragmentProgram(world.time.buffer.as('uniform')), {
       format: presentationFormat,
       blend: blending.normal,
     })
@@ -97,10 +98,8 @@ function createVertexProgram(
     out: {
       localPos: vec3f,
       worldPos: vec3f,
-
-      height: f32,
-
       clipPos: builtin.position,
+      height: f32,
     },
   })(({ idx, pos, height }) => {
     let localPos = cubeVertices.$[idx].mul(0.5)
@@ -118,7 +117,9 @@ function createVertexProgram(
   })
 }
 
-function createFragmentProgram() {
+function createFragmentProgram(
+  timeBuffer: TgpuBufferUniform<typeof TimeStruct>,
+) {
   return tgpu['~unstable'].fragmentFn({
     in: {
       localPos: vec3f,
@@ -127,12 +128,13 @@ function createFragmentProgram() {
     },
     out: vec4f,
   })(({ localPos, height }) => {
-    const color = vec4f(
+    let color = vec3f(
       abs(localPos.x),
       abs(localPos.y),
       abs(localPos.z / height),
-      1,
     )
-    return color
+
+    color = fract(color.add(vec3f(timeBuffer.$.elapsed * 0.1)))
+    return vec4f(color, 1)
   })
 }

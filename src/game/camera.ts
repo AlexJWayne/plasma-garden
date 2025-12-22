@@ -1,6 +1,6 @@
 import { query } from 'bitecs'
 import { type TgpuRoot } from 'typegpu'
-import { f32, mat4x4f, struct, vec3f } from 'typegpu/data'
+import { mat4x4f, struct, vec3f } from 'typegpu/data'
 import { mat4 } from 'wgpu-matrix'
 
 import { lookAt } from '../lib/matrix'
@@ -34,7 +34,7 @@ export function positionCameraSystem(world: World) {
   const playerPos = vec3f(Position[player], 0)
 
   camera.target.current = camera.target.current.add(
-    playerPos.sub(camera.target.current).mul(10 * world.delta),
+    playerPos.sub(camera.target.current).mul(10 * world.time.delta),
   )
   const pos = camera.target.current.add(OFFSET)
 
