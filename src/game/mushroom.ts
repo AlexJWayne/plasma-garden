@@ -55,6 +55,8 @@ const DEBUG = false
 type Mushroom = {
   height: number
   lobes: number
+  stemRadius: number
+  capRadius: number
 }
 const Mushroom = [] as Mushroom[]
 
@@ -62,6 +64,8 @@ const MushroomStruct = struct({
   pos: vec3f,
   height: f32,
   lobes: f32,
+  stemRadius: f32,
+  capRadius: f32,
 })
 type MushroomStruct = Infer<typeof MushroomStruct>
 
@@ -73,7 +77,12 @@ export function createMushroom(
 ) {
   const eid = addEntity(world, Position, Mushroom)
   Position[eid] = pos
-  Mushroom[eid] = { height, lobes }
+  Mushroom[eid] = {
+    height,
+    lobes,
+    stemRadius: Math.random() * 0.04 + 0.02,
+    capRadius: Math.random() * 0.2 + 0.3,
+  }
 }
 
 export function createRenderMushroomSystem(world: World) {
@@ -117,6 +126,8 @@ export function createRenderMushroomSystem(world: World) {
           pos: vec3f(Position[eid], 0),
           height: Mushroom[eid].height,
           lobes: Mushroom[eid].lobes,
+          stemRadius: Mushroom[eid].stemRadius,
+          capRadius: Mushroom[eid].capRadius,
         },
       })),
     )
@@ -139,16 +150,21 @@ function createVertexProgram(
       pos: vec2f,
       height: f32,
       lobes: f32,
+      stemRadius: f32,
+      capRadius: f32,
     },
     out: {
       localPos: vec3f,
       worldPos: vec3f,
       clipPos: builtin.position,
+
       entityPos: vec3f,
       height: f32,
       lobes: f32,
+      stemRadius: f32,
+      capRadius: f32,
     },
-  })(({ idx, pos, height, lobes }) => {
+  })(({ idx, pos, height, lobes, stemRadius, capRadius }) => {
     let localPos = cubeVertices.$[idx].mul(0.5)
     localPos.z += 0.5
     localPos.z *= height
@@ -160,9 +176,12 @@ function createVertexProgram(
       localPos,
       worldPos,
       clipPos,
+
       entityPos,
       height,
       lobes,
+      stemRadius,
+      capRadius,
     }
   })
 }
@@ -181,16 +200,21 @@ function createFragmentProgram(
   const main = tgpu['~unstable'].fragmentFn({
     in: {
       worldPos: vec3f,
+
       entityPos: vec3f,
       height: f32,
       lobes: f32,
+      stemRadius: f32,
+      capRadius: f32,
     },
     out: { color: vec4f, depth: builtin.fragDepth },
-  })(({ worldPos, entityPos, height, lobes }) => {
+  })(({ worldPos, entityPos, height, lobes, stemRadius, capRadius }) => {
     const mushroom = MushroomStruct({
       pos: entityPos,
       height,
       lobes,
+      stemRadius,
+      capRadius,
     })
 
     const hit = raymarch(worldPos, entityPos, mushroom)
@@ -224,7 +248,7 @@ function createFragmentProgram(
 
     for (let i = 0; i < MAX_STEPS; i++) {
       const point = cameraBuffer.$.pos.add(rayDirection.mul(totalDistance))
-      const distance = scene(point, entityPos, mushroom.height)
+      const distance = scene(point, entityPos, mushroom)
 
       if (distance < EPSILON) return Hit({ hit: true, pos: point })
       if (distance > MAX_DISTANCE) break
@@ -235,54 +259,55 @@ function createFragmentProgram(
     return Hit({ hit: false, pos: vec3f() })
   }
 
-  function scene(p: v3f, entityPos: v3f, height: number): number {
+  function scene(p: v3f, entityPos: v3f, mushroom: MushroomStruct): number {
     'use gpu'
-    const stalkR = 0.05
     const localP = p.sub(entityPos)
 
     const stalk = sdCapsule(
       localP,
-      vec3f(0, 0, stalkR),
-      vec3f(0, 0, height - stalkR),
-      stalkR,
+      vec3f(0, 0, mushroom.stemRadius),
+      vec3f(0, 0, mushroom.height - mushroom.stemRadius),
+      mushroom.stemRadius,
     )
 
-    const capR = 0.3
-    const capCenter = localP.sub(vec3f(0, 0, height - capR))
-    let cap = sdSphere(capCenter, capR)
+    const capCenter = localP.sub(
+      vec3f(0, 0, mushroom.height - mushroom.capRadius),
+    )
+    let cap = sdSphere(capCenter, mushroom.capRadius)
     cap = opSmoothDifference(
       cap,
-      sdBox3d(localP, vec3f(1, 1, height - capR)),
+      sdBox3d(localP, vec3f(1, 1, mushroom.height - mushroom.capRadius * 0.4)),
       0.05,
     )
 
     return opUnion(stalk, cap)
   }
 
-  function calcNormal(
-    p: v3f,
-    entityPos: v3f,
-    { height, lobes }: MushroomStruct,
-  ): v3f {
+  function calcNormal(p: v3f, entityPos: v3f, mushroom: MushroomStruct): v3f {
     'use gpu'
     const h = EPSILON
     const k = vec2f(1, -1)
     let normal = normalize(
       k.xyy
-        .mul(scene(p.add(k.xyy.mul(h)), entityPos, height))
+        .mul(scene(p.add(k.xyy.mul(h)), entityPos, mushroom))
         .add(
           k.yyx
-            .mul(scene(p.add(k.yyx.mul(h)), entityPos, height))
+            .mul(scene(p.add(k.yyx.mul(h)), entityPos, mushroom))
             .add(
               k.yxy
-                .mul(scene(p.add(k.yxy.mul(h)), entityPos, height))
-                .add(k.xxx.mul(scene(p.add(k.xxx.mul(h)), entityPos, height))),
+                .mul(scene(p.add(k.yxy.mul(h)), entityPos, mushroom))
+                .add(
+                  k.xxx.mul(scene(p.add(k.xxx.mul(h)), entityPos, mushroom)),
+                ),
             ),
         ),
     )
 
     const angle = atan2(p.y - entityPos.y, p.x - entityPos.x)
-    normal = vec3f(rotate2d(normal.xy, sin(angle * lobes) * 0.3), normal.z)
+    normal = vec3f(
+      rotate2d(normal.xy, sin(angle * mushroom.lobes) * 0.3),
+      normal.z,
+    )
     return normal
   }
 
