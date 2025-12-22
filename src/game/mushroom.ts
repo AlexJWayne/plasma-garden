@@ -202,7 +202,7 @@ function createFragmentProgram(
     const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
 
     const normal = calcNormal(hit.pos, entityPos, mushroom)
-    const diffuseValue = calcLighting(normal)
+    const diffuseValue = calcLighting(normal, hit.pos)
     const color = calcColor(diffuseValue, 0.2, hit.pos, mushroom)
 
     return {
@@ -286,12 +286,13 @@ function createFragmentProgram(
     return normal
   }
 
-  function calcLighting(normal: v3f): number {
+  function calcLighting(normal: v3f, hitPos: v3f): number {
     'use gpu'
     const lightDir = normalize(vec3f(1, 0, 1))
     const diffuse = max(dot(normal, lightDir), 0)
+    const viewDir = normalize(cameraBuffer.$.pos.sub(hitPos))
     const specular = pow(
-      max(dot(reflect(lightDir, normal), lightDir.mul(-1)), 0),
+      max(dot(reflect(lightDir.mul(-1), normal), viewDir), 0),
       32,
     )
     return diffuse * 0.5 + specular
