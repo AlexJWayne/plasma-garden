@@ -21,6 +21,12 @@ export const depthStencil = {
   depthCompare: 'less',
 } satisfies GPUDepthStencilState
 
+export const depthStencilTransparent = {
+  format: depthFormat,
+  depthWriteEnabled: false,
+  depthCompare: 'less',
+} satisfies GPUDepthStencilState
+
 export function createColorAttachment(world: World) {
   return {
     view: world.colorTexture.createView(),

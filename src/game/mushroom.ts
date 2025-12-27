@@ -23,6 +23,7 @@ import {
 import {
   abs,
   atan2,
+  clamp,
   dot,
   fract,
   length,
@@ -45,14 +46,13 @@ import {
   blending,
   createColorAttachment,
   createDepthAttachment,
-  depthStencil,
+  depthStencilTransparent,
 } from '../lib/web-gpu'
 import type { World } from '../main'
 import { presentationFormat, sampleCount } from '../setup-webgpu'
 
-import type { CameraStruct } from './camera'
+import { CAMERA_OFFSET, type CameraStruct } from './camera'
 import { Lifetime, Position, getLifetimeCompletion } from './components'
-import { PLAYER_HEIGHT } from './player'
 import { TimeStruct } from './time'
 
 const DEBUG = false
@@ -71,6 +71,7 @@ const MushroomStruct = struct({
   lobes: f32,
   stemRadius: f32,
   capRadius: f32,
+  alpha: f32,
 })
 type MushroomStruct = Infer<typeof MushroomStruct>
 
@@ -90,12 +91,12 @@ export function createMushroom(
   }
   Lifetime[eid] = {
     bornAt: world.time.elapsed,
-    duration: Math.random() * 5 + 5,
+    duration: Math.random() * 10 + 10,
   }
 }
 
 export function spawnMushroomsSystem(world: World) {
-  if (Math.random() < 0.2) {
+  if (Math.random() < 0.1) {
     createMushroom(
       world,
       vec2f(
@@ -140,7 +141,7 @@ export function createRenderMushroomSystem(world: World) {
         },
       },
     )
-    .withDepthStencil(depthStencil)
+    .withDepthStencil(depthStencilTransparent)
     .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
     .withMultisample({ count: sampleCount })
     .createPipeline()
@@ -150,8 +151,15 @@ export function createRenderMushroomSystem(world: World) {
     const mushrooms = query(world, [Mushroom, Position])
     if (mushrooms.length === 0) return
 
+    const cameraPos = world.camera.target.current.add(CAMERA_OFFSET)
+    const sortedMushrooms = [...mushrooms].sort((a, b) => {
+      const distA = length(cameraPos.sub(vec3f(Position[a], 0)))
+      const distB = length(cameraPos.sub(vec3f(Position[b], 0)))
+      return distB - distA
+    })
+
     mushroomsBuffer.writePartial(
-      [...mushrooms].map((eid, idx) => {
+      sortedMushrooms.map((eid, idx) => {
         const growth = easeOutSine(getLifetimeCompletion(world, eid))
         return {
           idx,
@@ -161,6 +169,7 @@ export function createRenderMushroomSystem(world: World) {
             lobes: Mushroom[eid].lobes,
             stemRadius: Mushroom[eid].stemRadius * growth,
             capRadius: Mushroom[eid].capRadius * growth,
+            alpha: clamp(remap(growth, 0.9, 1, 1, 0), 0, 1),
           },
         }
       }),
@@ -186,6 +195,7 @@ function createVertexProgram(
       lobes: f32,
       stemRadius: f32,
       capRadius: f32,
+      alpha: f32,
     },
     out: {
       localPos: vec3f,
@@ -197,11 +207,13 @@ function createVertexProgram(
       lobes: f32,
       stemRadius: f32,
       capRadius: f32,
+      alpha: f32,
     },
-  })(({ idx, pos, height, lobes, stemRadius, capRadius }) => {
+  })(({ idx, pos, height, lobes, stemRadius, capRadius, alpha }) => {
+    const scale = max(stemRadius, capRadius) * 1.5
     let localPos = cubeVertices.$[idx].mul(0.5)
     localPos.z += 0.5
-    localPos.z *= height
+    localPos = localPos.mul(vec3f(scale, scale, height))
 
     const entityPos = vec3f(pos, 0)
     const worldPos = localPos.add(entityPos)
@@ -216,6 +228,7 @@ function createVertexProgram(
       lobes,
       stemRadius,
       capRadius,
+      alpha,
     }
   })
 }
@@ -240,15 +253,17 @@ function createFragmentProgram(
       lobes: f32,
       stemRadius: f32,
       capRadius: f32,
+      alpha: f32,
     },
     out: { color: vec4f, depth: builtin.fragDepth },
-  })(({ worldPos, entityPos, height, lobes, stemRadius, capRadius }) => {
+  })(({ worldPos, entityPos, height, lobes, stemRadius, capRadius, alpha }) => {
     const mushroom = MushroomStruct({
       pos: entityPos,
       height,
       lobes,
       stemRadius,
       capRadius,
+      alpha,
     })
 
     const hit = raymarch(worldPos, entityPos, mushroom)
@@ -264,7 +279,7 @@ function createFragmentProgram(
     const color = calcColor(diffuseValue, 0.01, hit.pos, mushroom)
 
     return {
-      color: vec4f(color, 1),
+      color: vec4f(color, 1).mul(alpha),
       depth: hitClipPos.z / hitClipPos.w,
     }
   })

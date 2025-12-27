@@ -13,7 +13,7 @@ const FOV = (60 * Math.PI) / 180
 const NEAR = 0.1
 const FAR = 100
 
-const OFFSET = vec3f(0, -2, 2)
+export const CAMERA_OFFSET = vec3f(0, -2, 2)
 const UP = vec3f(0, 0, 1)
 
 export const CameraStruct = struct({
@@ -24,7 +24,7 @@ export const CameraStruct = struct({
 
 export function setupCamera(root: TgpuRoot) {
   const buffer = root.createBuffer(CameraStruct).$usage('uniform')
-  let target = { current: vec3f(0, 0, PLAYER_HEIGHT) }
+  const target = { current: vec3f(0, 0, PLAYER_HEIGHT) }
   return { buffer, target }
 }
 
@@ -37,7 +37,7 @@ export function positionCameraSystem(world: World) {
   camera.target.current = camera.target.current.add(
     playerPos.sub(camera.target.current).mul(2 * world.time.delta),
   )
-  const pos = camera.target.current.add(OFFSET)
+  const pos = camera.target.current.add(CAMERA_OFFSET)
 
   const projection = mat4.perspective(
     FOV,
