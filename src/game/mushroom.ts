@@ -91,17 +91,17 @@ export function createMushroom(
   }
   Lifetime[eid] = {
     bornAt: world.time.elapsed,
-    duration: Math.random() * 10 + 10,
+    duration: Math.random() * 30 + 15,
   }
 }
 
 export function spawnMushroomsSystem(world: World) {
-  if (Math.random() < 0.1) {
+  if (Math.random() < 0.2) {
     createMushroom(
       world,
       vec2f(
-        (Math.random() * 2 - 1) * 5, //
-        (Math.random() * 2 - 1) * 5,
+        (Math.random() * 2 - 1) * 10, //
+        (Math.random() * 2 - 1) * 10,
       ),
       Math.random() * 1.5 + 0.5,
       Math.floor(Math.random() * 8) + 3,
