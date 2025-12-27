@@ -65,7 +65,7 @@ function createFragmentProgram() {
     const line = abs(grid.sub(0.5))
     const d = min(line.x, line.y)
     const v = smoothstep(0.1, 0, d)
-    if (v < 0.75) discard()
+    if (v < 0.75) return vec4f(vec3f(0), 1)
 
     return vec4f(vec3f(0.2), 1)
   })

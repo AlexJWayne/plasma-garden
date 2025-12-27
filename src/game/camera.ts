@@ -7,12 +7,13 @@ import { lookAt } from '../lib/matrix'
 import type { World } from '../main'
 
 import { Player, Position } from './components'
+import { PLAYER_HEIGHT } from './player'
 
 const FOV = (60 * Math.PI) / 180
 const NEAR = 0.1
 const FAR = 100
 
-const OFFSET = vec3f(0, -5, 4)
+const OFFSET = vec3f(0, -2, 2)
 const UP = vec3f(0, 0, 1)
 
 export const CameraStruct = struct({
@@ -23,7 +24,7 @@ export const CameraStruct = struct({
 
 export function setupCamera(root: TgpuRoot) {
   const buffer = root.createBuffer(CameraStruct).$usage('uniform')
-  let target = { current: vec3f() }
+  let target = { current: vec3f(0, 0, PLAYER_HEIGHT) }
   return { buffer, target }
 }
 
@@ -31,10 +32,10 @@ export function positionCameraSystem(world: World) {
   const { camera } = world
 
   const player = query(world, [Player, Position])[0]
-  const playerPos = vec3f(Position[player], 0)
+  const playerPos = vec3f(Position[player], PLAYER_HEIGHT)
 
   camera.target.current = camera.target.current.add(
-    playerPos.sub(camera.target.current).mul(10 * world.time.delta),
+    playerPos.sub(camera.target.current).mul(2 * world.time.delta),
   )
   const pos = camera.target.current.add(OFFSET)
 

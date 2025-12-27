@@ -1,10 +1,4 @@
-import {
-  opSmoothUnion,
-  opUnion,
-  sdBoxFrame3d,
-  sdCapsule,
-  sdSphere,
-} from '@typegpu/sdf'
+import { sdSphere } from '@typegpu/sdf'
 import { query } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
@@ -19,7 +13,7 @@ import {
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import { abs, fract, length, normalize, sin } from 'typegpu/std'
+import { length, normalize } from 'typegpu/std'
 import { mat4 } from 'wgpu-matrix'
 
 import { cubeVertices } from '../lib/geometry'
@@ -34,7 +28,7 @@ import { presentationFormat, sampleCount } from '../setup-webgpu'
 
 import type { CameraStruct } from './camera'
 import { Player, Position, Velocity } from './components'
-import { SIZE } from './player'
+import { PLAYER_HEIGHT, SIZE } from './player'
 import type { TimeStruct } from './time'
 
 const DEBUG = false
@@ -105,7 +99,9 @@ function createVertexProgram(
     },
   })(({ idx }) => {
     const localPos = cubeVertices.$[idx].mul(SIZE / 2)
-    const worldPos = playerBuffer.$.transform.mul(vec4f(localPos, 1))
+    const worldPos = playerBuffer.$.transform.mul(
+      vec4f(localPos.add(vec3f(0, 0, PLAYER_HEIGHT)), 1),
+    )
     const clipPos = cameraBuffer.$.viewMatrix.mul(worldPos)
     return {
       worldPos: worldPos.xyz,
@@ -136,15 +132,7 @@ function createFragmentProgram(
     const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
 
     return {
-      color: vec4f(
-        vec3f(
-          0,
-          abs(fract((hit.pos.z + timeBuffer.$.elapsed * 0.005) * 50) - 0.5) +
-            0.5,
-          0,
-        ),
-        1,
-      ),
+      color: vec4f(vec3f(1), 1),
       depth: hitClipPos.z / hitClipPos.w,
     }
   })
@@ -155,54 +143,7 @@ function scene(p: v3f, player: PlayerStruct, time: number): number {
   const centeredP = player.inverseTransform.mul(vec4f(p, 1)).xyz
 
   let dist = f32(1e9)
-  // frame
-  // dist = opUnion(dist, sdBoxFrame3d(centeredP, vec3f(SIZE / 2), SIZE * 0.005))
-
-  // Head
-  dist = opUnion(
-    dist,
-    sdSphere(centeredP.sub(vec3f(SIZE * 0.2, 0, 0)), SIZE * 0.2),
-  )
-
-  // Torso
-  dist = opSmoothUnion(
-    dist,
-    sdSphere(
-      centeredP.sub(
-        vec3f(
-          -SIZE * 0.05, //
-          sin(time * 3) * SIZE * 0.07,
-          0,
-        ),
-      ),
-      SIZE * 0.125,
-    ),
-    SIZE * 0.05,
-  )
-
-  // Tail
-  dist = opSmoothUnion(
-    dist,
-    sdCapsule(
-      centeredP,
-      vec3f(-SIZE * 0.4, 0, 0),
-      vec3f(SIZE * 0.4, 0, 0),
-      SIZE * 0.01,
-    ),
-    SIZE * 0.2,
-  )
-
-  // wings
-  dist = opSmoothUnion(
-    dist,
-    sdCapsule(
-      centeredP,
-      vec3f(SIZE * 0.2, -SIZE * 0.4, 0),
-      vec3f(SIZE * 0.2, SIZE * 0.4, 0),
-      SIZE * 0.05,
-    ),
-    SIZE * 0.2,
-  )
+  dist = sdSphere(centeredP.sub(vec3f(0, 0, PLAYER_HEIGHT)), SIZE / 2)
   return dist
 }
 

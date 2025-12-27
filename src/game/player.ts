@@ -1,5 +1,5 @@
 import { addEntity, query } from 'bitecs'
-import { vec2f } from 'typegpu/data'
+import { f32, vec2f } from 'typegpu/data'
 import { length, normalize } from 'typegpu/std'
 
 import type { World } from '../main'
@@ -13,7 +13,8 @@ import {
   Velocity,
 } from './components'
 
-export const SIZE = 1
+export const SIZE = 0.05
+export const PLAYER_HEIGHT = f32(3)
 
 export function createPlayerEntity(world: World) {
   const eid = addEntity(

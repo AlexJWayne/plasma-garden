@@ -1,11 +1,12 @@
 import {
   opSmoothDifference,
+  opSmoothUnion,
   opUnion,
   sdBox3d,
   sdCapsule,
   sdSphere,
 } from '@typegpu/sdf'
-import { addEntity, query } from 'bitecs'
+import { addEntity, query, removeEntity } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
   type Infer,
@@ -34,9 +35,12 @@ import {
 } from 'typegpu/std'
 
 import { createInstanceBuffer } from '../lib/buffers'
+import { easeInCubic, easeInExpo, easeOutSine } from '../lib/ease'
 import { cubeVertices } from '../lib/geometry'
 import { hsl2rgb } from '../lib/hsl'
-import { rotate2d } from '../lib/transform'
+import { remap } from '../lib/remap'
+import { sdCone } from '../lib/sdf'
+import { rotate2d, rotateX } from '../lib/transform'
 import {
   blending,
   createColorAttachment,
@@ -47,7 +51,8 @@ import type { World } from '../main'
 import { presentationFormat, sampleCount } from '../setup-webgpu'
 
 import type { CameraStruct } from './camera'
-import { Position } from './components'
+import { Lifetime, Position, getLifetimeCompletion } from './components'
+import { PLAYER_HEIGHT } from './player'
 import { TimeStruct } from './time'
 
 const DEBUG = false
@@ -75,13 +80,39 @@ export function createMushroom(
   height: number,
   lobes: number,
 ) {
-  const eid = addEntity(world, Position, Mushroom)
+  const eid = addEntity(world, Position, Mushroom, Lifetime)
   Position[eid] = pos
   Mushroom[eid] = {
     height,
     lobes,
-    stemRadius: Math.random() * 0.04 + 0.02,
+    stemRadius: Math.random() * 0.04 + 0.04,
     capRadius: Math.random() * 0.2 + 0.3,
+  }
+  Lifetime[eid] = {
+    bornAt: world.time.elapsed,
+    duration: Math.random() * 5 + 5,
+  }
+}
+
+export function spawnMushroomsSystem(world: World) {
+  if (Math.random() < 0.2) {
+    createMushroom(
+      world,
+      vec2f(
+        (Math.random() * 2 - 1) * 5, //
+        (Math.random() * 2 - 1) * 5,
+      ),
+      Math.random() * 1.5 + 0.5,
+      Math.floor(Math.random() * 8) + 3,
+    )
+  }
+}
+
+export function expireMushroomsSystem(world: World) {
+  const mushrooms = query(world, [Mushroom, Lifetime])
+  for (const eid of mushrooms) {
+    const { bornAt, duration } = Lifetime[eid]
+    if (world.time.elapsed > bornAt + duration) removeEntity(world, eid)
   }
 }
 
@@ -89,7 +120,7 @@ export function createRenderMushroomSystem(world: World) {
   const [mushroomsBuffer, mushroomsLayout] = createInstanceBuffer(
     world,
     MushroomStruct,
-    100,
+    1000,
   )
 
   const pipeline = world.root['~unstable']
@@ -120,16 +151,19 @@ export function createRenderMushroomSystem(world: World) {
     if (mushrooms.length === 0) return
 
     mushroomsBuffer.writePartial(
-      [...mushrooms].map((eid, idx) => ({
-        idx,
-        value: {
-          pos: vec3f(Position[eid], 0),
-          height: Mushroom[eid].height,
-          lobes: Mushroom[eid].lobes,
-          stemRadius: Mushroom[eid].stemRadius,
-          capRadius: Mushroom[eid].capRadius,
-        },
-      })),
+      [...mushrooms].map((eid, idx) => {
+        const growth = easeOutSine(getLifetimeCompletion(world, eid))
+        return {
+          idx,
+          value: {
+            pos: vec3f(Position[eid], 0),
+            height: Mushroom[eid].height * growth,
+            lobes: Mushroom[eid].lobes,
+            stemRadius: Mushroom[eid].stemRadius * growth,
+            capRadius: Mushroom[eid].capRadius * growth,
+          },
+        }
+      }),
     )
 
     pipeline
@@ -227,7 +261,7 @@ function createFragmentProgram(
 
     const normal = calcNormal(hit.pos, entityPos, mushroom)
     const diffuseValue = calcLighting(normal, hit.pos)
-    const color = calcColor(diffuseValue, 0.2, hit.pos, mushroom)
+    const color = calcColor(diffuseValue, 0.01, hit.pos, mushroom)
 
     return {
       color: vec4f(color, 1),
@@ -263,11 +297,19 @@ function createFragmentProgram(
     'use gpu'
     const localP = p.sub(entityPos)
 
-    const stalk = sdCapsule(
-      localP,
-      vec3f(0, 0, mushroom.stemRadius),
-      vec3f(0, 0, mushroom.height - mushroom.stemRadius),
-      mushroom.stemRadius,
+    const stalk = opSmoothUnion(
+      sdCapsule(
+        localP,
+        vec3f(0, 0, mushroom.stemRadius),
+        vec3f(0, 0, mushroom.height - mushroom.stemRadius),
+        mushroom.stemRadius,
+      ),
+      sdCone(
+        rotateX(localP.sub(vec3f(0, 0, mushroom.height - 0.2)), -Math.PI / 2),
+        0.15,
+        mushroom.height - 0.2,
+      ),
+      0.15,
     )
 
     const capCenter = localP.sub(
@@ -313,8 +355,12 @@ function createFragmentProgram(
 
   function calcLighting(normal: v3f, hitPos: v3f): number {
     'use gpu'
-    const lightDir = normalize(vec3f(1, 0, 1))
-    const diffuse = max(dot(normal, lightDir), 0)
+    const lightPos = cameraBuffer.$.targetPos
+    const lightDistance = lightPos.sub(hitPos)
+    const lightDir = normalize(lightDistance)
+    const diffuse =
+      max(dot(normal, lightDir), 0) *
+      remap(length(lightDistance), f32(2), f32(15), f32(1), f32(0))
     const viewDir = normalize(cameraBuffer.$.pos.sub(hitPos))
     const specular = pow(
       max(dot(reflect(lightDir.mul(-1), normal), viewDir), 0),
@@ -336,9 +382,14 @@ function createFragmentProgram(
 
     const angle = atan2(hitPos.y - mushroom.pos.y, hitPos.x - mushroom.pos.x)
 
+    const glowZFactor = easeInExpo(hitPos.z / mushroom.height)
+    const glowZ = glowZFactor * mushroom.height
+
     let glowValue =
-      (hitPos.z + sin(angle * mushroom.lobes) * 0.01) * 3 +
-      timeBuffer.$.elapsed * 0.1
+      (glowZ + sin(angle * mushroom.lobes) * 0.01) * 0.7 +
+      timeBuffer.$.elapsed * 0.1 +
+      mushroom.pos.x +
+      mushroom.pos.y
     glowValue = abs(fract(glowValue) - 0.5) * 2
 
     let glowWhiteValue = smoothstep(0.95, 1, glowValue)
@@ -353,6 +404,7 @@ function createFragmentProgram(
     const glowColor = hsl2rgb(vec3f(glowHue, 1, 0.6))
       .mul(glowValue)
       .add(vec3f(glowWhiteValue))
+      .mul(easeInCubic(hitPos.z / mushroom.height))
 
     return diffuseColor.add(glowColor)
   }
