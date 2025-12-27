@@ -3,6 +3,7 @@ import { builtin, vec2f, vec3f, vec4f } from 'typegpu/data'
 import { abs, discard, fract, min, smoothstep } from 'typegpu/std'
 
 import { quadVertices } from '../lib/geometry'
+import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
 import {
   createColorAttachment,
   createDepthAttachment,
@@ -20,6 +21,7 @@ export function createRenderBackgroundSystem(world: World) {
     .withDepthStencil(depthStencil)
     .withMultisample({ count: sampleCount })
     .createPipeline()
+    .withPerformanceCallback(createPipelinePerformanceCallback('background'))
 
   function render(world: World) {
     renderPipeline

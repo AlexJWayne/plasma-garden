@@ -28,6 +28,7 @@ import {
   fract,
   length,
   max,
+  mix,
   normalize,
   pow,
   reflect,
@@ -39,6 +40,7 @@ import { createInstanceBuffer } from '../lib/buffers'
 import { easeInCubic, easeInExpo, easeOutSine } from '../lib/ease'
 import { cubeVertices } from '../lib/geometry'
 import { hsl2rgb } from '../lib/hsl'
+import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
 import { remap } from '../lib/remap'
 import { sdCone } from '../lib/sdf'
 import { rotate2d, rotateX } from '../lib/transform'
@@ -96,7 +98,7 @@ export function createMushroom(
 }
 
 export function spawnMushroomsSystem(world: World) {
-  if (Math.random() < 0.2) {
+  if (Math.random() < 0.05) {
     createMushroom(
       world,
       vec2f(
@@ -146,6 +148,7 @@ export function createRenderMushroomSystem(world: World) {
     .withMultisample({ count: sampleCount })
     .createPipeline()
     .with(mushroomsLayout, mushroomsBuffer)
+    .withPerformanceCallback(createPipelinePerformanceCallback('mushrooms'))
 
   function render(world: World) {
     const mushrooms = query(world, [Mushroom, Position])
@@ -238,8 +241,8 @@ function createFragmentProgram(
   cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
 ) {
   const MAX_DISTANCE = f32(100)
-  const MAX_STEPS = 100
-  const EPSILON = 0.0001
+  const MAX_STEPS = 50
+  const EPSILON = 0.001
 
   const Hit = struct({ hit: bool, pos: vec3f })
   type Hit = Infer<typeof Hit>
@@ -392,7 +395,9 @@ function createFragmentProgram(
   ): v3f {
     'use gpu'
 
-    const baseColor = vec3f(0.2, 0.3, 0.7)
+    const baseHueShift =
+      (fract(mushroom.pos.x * 177 + mushroom.pos.y * 237) * 2 - 1) * 0.1
+    const baseColor = hsl2rgb(vec3f(0.66 + baseHueShift, 1, 0.65))
     const diffuseColor = baseColor.mul(ambient + (1 - ambient) * diffuse)
 
     const angle = atan2(hitPos.y - mushroom.pos.y, hitPos.x - mushroom.pos.x)

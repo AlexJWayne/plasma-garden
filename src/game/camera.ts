@@ -9,11 +9,11 @@ import type { World } from '../main'
 import { Player, Position } from './components'
 import { PLAYER_HEIGHT } from './player'
 
-const FOV = (60 * Math.PI) / 180
+const FOV = 45 * (Math.PI / 180)
 const NEAR = 0.1
 const FAR = 100
 
-export const CAMERA_OFFSET = vec3f(0, -2, 2)
+export const CAMERA_OFFSET = vec3f(0, -1, 1).mul(1.5)
 const UP = vec3f(0, 0, 1)
 
 export const CameraStruct = struct({
@@ -35,7 +35,7 @@ export function positionCameraSystem(world: World) {
   const playerPos = vec3f(Position[player], PLAYER_HEIGHT)
 
   camera.target.current = camera.target.current.add(
-    playerPos.sub(camera.target.current).mul(2 * world.time.delta),
+    playerPos.sub(camera.target.current).mul(3 * world.time.delta),
   )
   const pos = camera.target.current.add(CAMERA_OFFSET)
 

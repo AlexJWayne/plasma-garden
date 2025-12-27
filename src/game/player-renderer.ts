@@ -17,6 +17,7 @@ import { length, normalize } from 'typegpu/std'
 import { mat4 } from 'wgpu-matrix'
 
 import { cubeVertices } from '../lib/geometry'
+import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
 import {
   blending,
   createColorAttachment,
@@ -63,6 +64,7 @@ export function createRenderPlayerSystem(world: World) {
     .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
     .withMultisample({ count: sampleCount })
     .createPipeline()
+    .withPerformanceCallback(createPipelinePerformanceCallback('player'))
 
   function render(world: World) {
     const player = query(world, [Player, Position, Velocity])[0]
