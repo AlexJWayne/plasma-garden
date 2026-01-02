@@ -411,7 +411,7 @@ function createFragmentProgram(
     const lightDir = normalize(lightDistance)
     const diffuse =
       max(dot(normal, lightDir), 0) *
-      remap(length(lightDistance), f32(2), f32(15), f32(1), f32(0))
+      remap(length(lightDistance), f32(2), f32(8), f32(1), f32(0))
     const viewDir = normalize(cameraBuffer.$.pos.sub(hitPos))
     const specular = pow(
       max(dot(reflect(lightDir.mul(-1), normal), viewDir), 0),

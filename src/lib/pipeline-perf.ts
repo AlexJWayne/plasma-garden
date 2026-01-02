@@ -15,7 +15,7 @@ function createPerfEl() {
 }
 
 export function createPipelinePerformanceCallback(name: string) {
-  const times = Array(10).fill(0)
+  const times = Array(240).fill(0)
   let timesIndex = 0
 
   return (start: bigint, end: bigint) => {
