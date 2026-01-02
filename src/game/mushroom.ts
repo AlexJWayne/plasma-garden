@@ -14,7 +14,6 @@ import {
   builtin,
   f32,
   struct,
-  type v2f,
   type v3f,
   vec2f,
   vec3f,
@@ -36,17 +35,9 @@ import {
 } from 'typegpu/std'
 
 import { createInstanceBuffer } from '../lib/buffers'
-import {
-  easeInCubic,
-  easeInExpo,
-  easeInOutQuad,
-  easeInOutSine,
-  easeInQuad,
-  easeInSine,
-  easeOutQuad,
-  easeOutSine,
-} from '../lib/ease'
+import { easeInCubic, easeInExpo, easeInSine, easeOutSine } from '../lib/ease'
 import { cubeVertices } from '../lib/geometry'
+import { GridPosition, getRandomEmptyGridPosition } from '../lib/grid'
 import { hsl2rgb } from '../lib/hsl'
 import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
 import { remap } from '../lib/remap'
@@ -56,13 +47,13 @@ import {
   blending,
   createColorAttachment,
   createDepthAttachment,
-  depthStencilTransparent,
+  depthStencil,
 } from '../lib/web-gpu'
 import type { World } from '../main'
 import { presentationFormat, sampleCount } from '../setup-webgpu'
 
-import { CAMERA_OFFSET, type CameraStruct } from './camera'
-import { Lifetime, Position, getLifetimeCompletion } from './components'
+import { type CameraStruct } from './camera'
+import { Lifetime, getLifetimeCompletion } from './components'
 import { TimeStruct } from './time'
 
 const DEBUG = false
@@ -86,21 +77,17 @@ const MushroomStruct = struct({
 })
 type MushroomStruct = Infer<typeof MushroomStruct>
 
-export function createMushroom(
-  world: World,
-  pos: v2f,
-  height: number,
-  lobes: number,
-) {
-  const eid = addEntity(world, Position, Mushroom, Lifetime)
-  Position[eid] = pos
+export function createMushroom(world: World) {
+  const gridPosition = getRandomEmptyGridPosition(world)
+  if (!gridPosition) return
+
+  const eid = addEntity(world, GridPosition, Mushroom, Lifetime)
+  GridPosition[eid] = gridPosition
   Mushroom[eid] = {
-    height,
-    lobes,
-    // stemRadius: 0.08,
+    height: Math.random() * 1.5 + 0.5,
+    lobes: Math.floor(Math.random() * 8) + 3,
     stemRadius: Math.random() * 0.04 + 0.04,
-    // capRadius: 0.5,
-    capRadius: Math.random() * 0.2 + 0.3,
+    capRadius: Math.random() * 0.7 + 0.3,
   }
   Lifetime[eid] = {
     bornAt: world.time.elapsed,
@@ -109,16 +96,8 @@ export function createMushroom(
 }
 
 export function spawnMushroomsSystem(world: World) {
-  if (Math.random() < 0.2) {
-    createMushroom(
-      world,
-      vec2f(
-        (Math.random() * 2 - 1) * 10, //
-        (Math.random() * 2 - 1) * 10,
-      ),
-      Math.random() * 1.5 + 0.5,
-      Math.floor(Math.random() * 8) + 3,
-    )
+  if (Math.random() < 0.1) {
+    createMushroom(world)
   }
 }
 
@@ -154,7 +133,7 @@ export function createRenderMushroomSystem(world: World) {
         },
       },
     )
-    .withDepthStencil(depthStencilTransparent)
+    .withDepthStencil(depthStencil)
     .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
     .withMultisample({ count: sampleCount })
     .createPipeline()
@@ -162,24 +141,17 @@ export function createRenderMushroomSystem(world: World) {
     .withPerformanceCallback(createPipelinePerformanceCallback('mushrooms'))
 
   function render(world: World) {
-    const mushrooms = query(world, [Mushroom, Position])
+    const mushrooms = query(world, [Mushroom, GridPosition])
     if (mushrooms.length === 0) return
 
-    const cameraPos = world.camera.target.current.add(CAMERA_OFFSET)
-    const sortedMushrooms = [...mushrooms].sort((a, b) => {
-      const distA = length(cameraPos.sub(vec3f(Position[a], 0)))
-      const distB = length(cameraPos.sub(vec3f(Position[b], 0)))
-      return distB - distA
-    })
-
     mushroomsBuffer.writePartial(
-      sortedMushrooms.map((eid, idx) => {
+      [...mushrooms].map((eid, idx) => {
         const completion = getLifetimeCompletion(world, eid)
         const growth = easeOutSine(completion)
         return {
           idx,
           value: {
-            pos: vec3f(Position[eid], 0),
+            pos: vec3f(GridPosition[eid], 0),
             height: Mushroom[eid].height,
             lobes: Mushroom[eid].lobes,
             stemRadius: Mushroom[eid].stemRadius,

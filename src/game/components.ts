@@ -1,5 +1,5 @@
 import type { EntityId } from 'bitecs'
-import { type v2f } from 'typegpu/data'
+import { type v2f, type v2u } from 'typegpu/data'
 import { clamp } from 'typegpu/std'
 
 import type { World } from '../main'
