@@ -1,4 +1,4 @@
-import { type World, query } from 'bitecs'
+import { type World, addEntity, query, removeComponent } from 'bitecs'
 import type { v2i } from 'typegpu/data'
 import { vec2i } from 'typegpu/data'
 
@@ -6,34 +6,44 @@ const EXTENTS = {
   min: vec2i(-10, -10),
   max: vec2i(10, 10),
 }
-const SIZE = EXTENTS.max.sub(EXTENTS.min).add(1)
-const TOTAL_POSITIONS = SIZE.x * SIZE.y
 
 export const GridPosition = [] as v2i[]
+export const EmptyGridPosition = [] as v2i[]
 
-// TODO: This is terribly slow
+export function createGridPositions(world: World): void {
+  for (let y = EXTENTS.min.y; y <= EXTENTS.max.y; y++) {
+    for (let x = EXTENTS.min.x; x <= EXTENTS.max.x; x++) {
+      const eid = addEntity(world, EmptyGridPosition)
+      EmptyGridPosition[eid] = vec2i(x, y)
+    }
+  }
+}
+
+export function takeEmptyGridPosition(world: World, pos: v2i): v2i | null {
+  const emptyPositions = query(world, [EmptyGridPosition])
+  if (emptyPositions.length === 0) return null
+
+  for (const eid of emptyPositions) {
+    const position = EmptyGridPosition[eid]
+    if (position.x === pos.x && position.y === pos.y) {
+      removeComponent(world, eid, EmptyGridPosition)
+      return position
+    }
+  }
+
+  throw new Error(`Position ${pos} is not empty`)
+}
+
+export function releaseGridPosition(world: World, pos: v2i): void {
+  const eid = addEntity(world, EmptyGridPosition)
+  EmptyGridPosition[eid] = pos
+}
+
 export function getRandomEmptyGridPosition(world: World): v2i | null {
-  const occupiedEntities = query(world, [GridPosition])
+  const emptyPositions = query(world, [EmptyGridPosition])
+  if (emptyPositions.length === 0) return null
 
-  // Create a Set of occupied positions for O(1) lookup
-  const occupiedPositions = new Set<string>()
-  for (const eid of occupiedEntities) {
-    const pos = GridPosition[eid]
-    occupiedPositions.add(`${pos.x},${pos.y}`)
-  }
-
-  const emptyPositions = TOTAL_POSITIONS - occupiedPositions.size
-  if (emptyPositions === 0) return null
-
-  // Generate random positions until we find an empty one
-  const maxAttempts = Math.min(emptyPositions * 10, 500)
-  for (let i = 0; i < maxAttempts; i++) {
-    const x = Math.floor(Math.random() * SIZE.x) + EXTENTS.min.x
-    const y = Math.floor(Math.random() * SIZE.y) + EXTENTS.min.y
-    const key = `${x},${y}`
-
-    if (!occupiedPositions.has(key)) return vec2i(x, y)
-  }
-
-  return null
+  const index = Math.floor(Math.random() * emptyPositions.length)
+  const eid = emptyPositions[index]
+  return EmptyGridPosition[eid]
 }

@@ -37,7 +37,12 @@ import {
 import { createInstanceBuffer } from '../lib/buffers'
 import { easeInCubic, easeInExpo, easeInSine, easeOutSine } from '../lib/ease'
 import { cubeVertices } from '../lib/geometry'
-import { GridPosition, getRandomEmptyGridPosition } from '../lib/grid'
+import {
+  GridPosition,
+  getRandomEmptyGridPosition,
+  releaseGridPosition,
+  takeEmptyGridPosition,
+} from '../lib/grid'
 import { hsl2rgb } from '../lib/hsl'
 import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
 import { remap } from '../lib/remap'
@@ -81,6 +86,8 @@ export function createMushroom(world: World) {
   const gridPosition = getRandomEmptyGridPosition(world)
   if (!gridPosition) return
 
+  takeEmptyGridPosition(world, gridPosition)
+
   const eid = addEntity(world, GridPosition, Mushroom, Lifetime)
   GridPosition[eid] = gridPosition
   Mushroom[eid] = {
@@ -96,16 +103,17 @@ export function createMushroom(world: World) {
 }
 
 export function spawnMushroomsSystem(world: World) {
-  if (Math.random() < 0.1) {
-    createMushroom(world)
-  }
+  if (Math.random() < 0.05) createMushroom(world)
 }
 
 export function expireMushroomsSystem(world: World) {
-  const mushrooms = query(world, [Mushroom, Lifetime])
+  const mushrooms = query(world, [Mushroom, Lifetime, GridPosition])
   for (const eid of mushrooms) {
     const { bornAt, duration } = Lifetime[eid]
-    if (world.time.elapsed > bornAt + duration) removeEntity(world, eid)
+    if (world.time.elapsed > bornAt + duration) {
+      removeEntity(world, eid)
+      releaseGridPosition(world, GridPosition[eid])
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 import { setKeyStateSystem } from '../input'
+import { createGridPositions } from '../lib/grid'
 import type { World } from '../main'
 import { listenForResize } from '../setup-webgpu'
 
@@ -18,6 +19,7 @@ import { updateWorldTimeSystem } from './time'
 export function startGame(world: World) {
   listenForResize(world)
 
+  createGridPositions(world)
   createPlayerEntity(world)
 
   const renderPlayerSystem = createRenderPlayerSystem(world)
