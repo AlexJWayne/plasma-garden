@@ -1,10 +1,4 @@
-import {
-  opSmoothDifference,
-  sdBox2d,
-  sdBox3d,
-  sdBoxFrame3d,
-  sdSphere,
-} from '@typegpu/sdf'
+import { opSmoothDifference, sdBox2d, sdBox3d, sdSphere } from '@typegpu/sdf'
 import { type TgpuBufferUniform, tgpu } from 'typegpu'
 import {
   type Infer,
@@ -18,29 +12,21 @@ import {
   vec4f,
 } from 'typegpu/data'
 import {
-  abs,
-  atan2,
   clamp,
   dot,
-  floor,
-  fract,
   length,
   max,
-  min,
   mix,
-  mod,
   normalize,
   pow,
   reflect,
   round,
-  sin,
-  smoothstep,
 } from 'typegpu/std'
 
+import { dither } from '../lib/dither'
 import { quadVertices } from '../lib/geometry'
 import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
 import { remap } from '../lib/remap'
-import { rotate2d } from '../lib/transform'
 import {
   createColorAttachment,
   createDepthAttachment,
@@ -91,7 +77,7 @@ function createVertexProgram(
     },
   })(({ idx }) => {
     const uv = quadVertices.$[idx]
-    const worldPos = vec3f(uv.mul(10), 0)
+    const worldPos = vec3f(uv.mul(10.5), 0)
     const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
     return {
       worldPos,
@@ -114,13 +100,17 @@ function createFragmentProgram(
   const COLOR = vec3f(0.2, 0.3, 0.1)
 
   const main = tgpu['~unstable'].fragmentFn({
-    in: { worldPos: vec3f, uv: vec2f },
+    in: {
+      worldPos: vec3f,
+      clipPos: builtin.position,
+    },
     out: vec4f,
-  })(({ worldPos, uv }) => {
+  })(({ worldPos, clipPos }) => {
     const hit = raymarch(worldPos)
     if (hit.hit) {
       const lighting = calcLighting(calcNormal(hit.pos), hit.pos)
-      return vec4f(vec3f(getColor(hit.pos).mul(lighting)), 1)
+      const color = getColor(hit.pos).mul(lighting)
+      return vec4f(dither(color, clipPos.xy), 1)
     }
     return vec4f(vec3f(0.2), 1)
   })
@@ -140,10 +130,8 @@ function createFragmentProgram(
   function getColor(hitPos: v3f): v3f {
     'use gpu'
     const repeatedP = vec2f(hitPos.xy.sub(round(hitPos.xy.div(1))))
-    const d = 1 - clamp(sdBox2d(repeatedP, vec2f(0.35)) * 6, 0, 1)
-
-    // return vec3f(d)
-    return mix(COLOR, COLOR.mul(0.5), d)
+    const d = clamp(sdBox2d(repeatedP, vec2f(0.35)) * 6, 0, 1)
+    return mix(COLOR.mul(0.5), COLOR, d)
   }
 
   function calcLighting(normal: v3f, hitPos: v3f): number {
