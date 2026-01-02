@@ -23,17 +23,17 @@ import {
   round,
 } from 'typegpu/std'
 
-import { dither } from '../lib/dither'
-import { quadVertices } from '../lib/geometry'
-import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
-import { remap } from '../lib/remap'
+import { dither } from '../../lib/dither'
+import { quadVertices } from '../../lib/geometry'
+import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
+import { remap } from '../../lib/remap'
 import {
   createColorAttachment,
   createDepthAttachment,
   depthStencil,
-} from '../lib/web-gpu'
-import type { World } from '../main'
-import { presentationFormat, sampleCount } from '../setup-webgpu'
+} from '../../lib/web-gpu'
+import type { World } from '../../main'
+import { presentationFormat, sampleCount } from '../../setup-webgpu'
 
 import { CameraStruct } from './camera'
 

@@ -1,9 +1,14 @@
 import { query } from 'bitecs'
+import type { v2f } from 'typegpu/data'
 import { length, normalize } from 'typegpu/std'
 
-import type { World } from '../main'
+import type { World } from '../../main'
 
-import { Acceleration, Drag, MaxSpeed, Position, Velocity } from './components'
+export const Position = [] as v2f[]
+export const Velocity = [] as v2f[]
+export const Acceleration = [] as v2f[]
+export const Drag = [] as number[]
+export const MaxSpeed = [] as number[]
 
 export function physicsSystem(world: World) {
   bounceOffBoundariesSystem(world)

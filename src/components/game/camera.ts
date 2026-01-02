@@ -3,11 +3,11 @@ import { type TgpuRoot } from 'typegpu'
 import { mat4x4f, struct, vec3f } from 'typegpu/data'
 import { mat4 } from 'wgpu-matrix'
 
-import { lookAt } from '../lib/matrix'
-import type { World } from '../main'
+import { lookAt } from '../../lib/matrix'
+import type { World } from '../../main'
+import { Position } from '../general/physics'
 
-import { Player, Position } from './components'
-import { PLAYER_HEIGHT } from './player'
+import { PLAYER_HEIGHT, Player } from './player'
 
 const FOV = 45 * (Math.PI / 180)
 const NEAR = 0.1

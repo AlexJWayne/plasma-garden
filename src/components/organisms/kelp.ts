@@ -1,10 +1,9 @@
 import { addEntity, query, removeEntity, set } from 'bitecs'
 import { type Infer, f32, struct, vec3f } from 'typegpu/data'
 
-import { GridPosition, getRandomEmptyGridPosition } from '../lib/grid'
-import type { World } from '../main'
-
-import { Lifetime } from './lifetime'
+import type { World } from '../../main'
+import { GridPosition, getRandomEmptyGridPosition } from '../general/grid'
+import { Lifetime } from '../general/lifetime'
 
 type Kelp = {
   height: number

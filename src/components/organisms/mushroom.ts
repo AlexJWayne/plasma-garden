@@ -34,27 +34,31 @@ import {
   smoothstep,
 } from 'typegpu/std'
 
-import { createInstanceBuffer } from '../lib/buffers'
-import { easeInCubic, easeInExpo, easeInSine, easeOutSine } from '../lib/ease'
-import { cubeVertices } from '../lib/geometry'
-import { GridPosition, getRandomEmptyGridPosition } from '../lib/grid'
-import { hsl2rgb } from '../lib/hsl'
-import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
-import { remap } from '../lib/remap'
-import { sdCone } from '../lib/sdf'
-import { rotate2d, rotateX } from '../lib/transform'
+import { createInstanceBuffer } from '../../lib/buffers'
+import {
+  easeInCubic,
+  easeInExpo,
+  easeInSine,
+  easeOutSine,
+} from '../../lib/ease'
+import { cubeVertices } from '../../lib/geometry'
+import { hsl2rgb } from '../../lib/hsl'
+import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
+import { remap } from '../../lib/remap'
+import { sdCone } from '../../lib/sdf'
+import { rotate2d, rotateX } from '../../lib/transform'
 import {
   blending,
   createColorAttachment,
   createDepthAttachment,
   depthStencil,
-} from '../lib/web-gpu'
-import type { World } from '../main'
-import { presentationFormat, sampleCount } from '../setup-webgpu'
-
-import { type CameraStruct } from './camera'
-import { Lifetime, getLifetimeCompletion } from './lifetime'
-import { TimeStruct } from './time'
+} from '../../lib/web-gpu'
+import type { World } from '../../main'
+import { presentationFormat, sampleCount } from '../../setup-webgpu'
+import type { TimeStruct } from '../../time'
+import type { CameraStruct } from '../game/camera'
+import { GridPosition, getRandomEmptyGridPosition } from '../general/grid'
+import { Lifetime, getLifetimeCompletion } from '../general/lifetime'
 
 const DEBUG = false
 

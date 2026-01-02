@@ -1,7 +1,7 @@
 import { type EntityId, observe, onSet } from 'bitecs'
 import { clamp } from 'typegpu/std'
 
-import type { World } from '../main'
+import type { World } from '../../main'
 
 export type Lifetime = {
   bornAt: number

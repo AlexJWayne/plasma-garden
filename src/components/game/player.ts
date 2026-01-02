@@ -2,16 +2,16 @@ import { addEntity, query } from 'bitecs'
 import { f32, vec2f } from 'typegpu/data'
 import { length, normalize } from 'typegpu/std'
 
-import type { World } from '../main'
-
+import type { World } from '../../main'
 import {
   Acceleration,
   Drag,
   MaxSpeed,
-  Player,
   Position,
   Velocity,
-} from './components'
+} from '../general/physics'
+
+export const Player = {}
 
 export const SIZE = 0.05
 export const PLAYER_HEIGHT = f32(3)

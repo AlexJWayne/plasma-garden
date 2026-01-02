@@ -16,20 +16,20 @@ import {
 import { length, normalize } from 'typegpu/std'
 import { mat4 } from 'wgpu-matrix'
 
-import { cubeVertices } from '../lib/geometry'
-import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
+import type { CameraStruct } from '../../camera'
+import { cubeVertices } from '../../lib/geometry'
+import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import {
   blending,
   createColorAttachment,
   createDepthAttachment,
   depthStencil,
-} from '../lib/web-gpu'
-import type { World } from '../main'
-import { presentationFormat, sampleCount } from '../setup-webgpu'
+} from '../../lib/web-gpu'
+import type { World } from '../../main'
+import { presentationFormat, sampleCount } from '../../setup-webgpu'
+import { Position, Velocity } from '../general/physics'
 
-import type { CameraStruct } from './camera'
-import { Player, Position, Velocity } from './components'
-import { PLAYER_HEIGHT, SIZE } from './player'
+import { PLAYER_HEIGHT, Player, SIZE } from './player'
 
 const DEBUG = false
 
