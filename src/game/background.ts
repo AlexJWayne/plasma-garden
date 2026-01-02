@@ -1,6 +1,6 @@
 import { type TgpuBufferUniform, tgpu } from 'typegpu'
 import { builtin, vec2f, vec3f, vec4f } from 'typegpu/data'
-import { abs, discard, fract, min, smoothstep } from 'typegpu/std'
+import { abs, fract, min, smoothstep } from 'typegpu/std'
 
 import { quadVertices } from '../lib/geometry'
 import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'

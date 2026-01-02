@@ -160,8 +160,8 @@ function raymarch(
 ): Hit {
   'use gpu'
 
-  const MAX_DISTANCE = f32(100)
-  const MAX_STEPS = 100
+  const MAX_DISTANCE = f32(20)
+  const MAX_STEPS = 60
   const EPSILON = 0.0001
 
   const triDiff = worldPos.sub(cameraPos)

@@ -28,7 +28,6 @@ import {
   fract,
   length,
   max,
-  mix,
   normalize,
   pow,
   reflect,
@@ -37,7 +36,16 @@ import {
 } from 'typegpu/std'
 
 import { createInstanceBuffer } from '../lib/buffers'
-import { easeInCubic, easeInExpo, easeOutSine } from '../lib/ease'
+import {
+  easeInCubic,
+  easeInExpo,
+  easeInOutQuad,
+  easeInOutSine,
+  easeInQuad,
+  easeInSine,
+  easeOutQuad,
+  easeOutSine,
+} from '../lib/ease'
 import { cubeVertices } from '../lib/geometry'
 import { hsl2rgb } from '../lib/hsl'
 import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
@@ -74,6 +82,7 @@ const MushroomStruct = struct({
   stemRadius: f32,
   capRadius: f32,
   alpha: f32,
+  completion: f32,
 })
 type MushroomStruct = Infer<typeof MushroomStruct>
 
@@ -88,7 +97,9 @@ export function createMushroom(
   Mushroom[eid] = {
     height,
     lobes,
+    // stemRadius: 0.08,
     stemRadius: Math.random() * 0.04 + 0.04,
+    // capRadius: 0.5,
     capRadius: Math.random() * 0.2 + 0.3,
   }
   Lifetime[eid] = {
@@ -98,7 +109,7 @@ export function createMushroom(
 }
 
 export function spawnMushroomsSystem(world: World) {
-  if (Math.random() < 0.05) {
+  if (Math.random() < 0.2) {
     createMushroom(
       world,
       vec2f(
@@ -163,16 +174,18 @@ export function createRenderMushroomSystem(world: World) {
 
     mushroomsBuffer.writePartial(
       sortedMushrooms.map((eid, idx) => {
-        const growth = easeOutSine(getLifetimeCompletion(world, eid))
+        const completion = getLifetimeCompletion(world, eid)
+        const growth = easeOutSine(completion)
         return {
           idx,
           value: {
             pos: vec3f(Position[eid], 0),
-            height: Mushroom[eid].height * growth,
+            height: Mushroom[eid].height,
             lobes: Mushroom[eid].lobes,
-            stemRadius: Mushroom[eid].stemRadius * growth,
-            capRadius: Mushroom[eid].capRadius * growth,
+            stemRadius: Mushroom[eid].stemRadius,
+            capRadius: Mushroom[eid].capRadius,
             alpha: clamp(remap(growth, 0.9, 1, 1, 0), 0, 1),
+            completion,
           },
         }
       }),
@@ -199,6 +212,7 @@ function createVertexProgram(
       stemRadius: f32,
       capRadius: f32,
       alpha: f32,
+      completion: f32,
     },
     out: {
       localPos: vec3f,
@@ -211,29 +225,36 @@ function createVertexProgram(
       stemRadius: f32,
       capRadius: f32,
       alpha: f32,
+      completion: f32,
     },
-  })(({ idx, pos, height, lobes, stemRadius, capRadius, alpha }) => {
-    const scale = max(stemRadius, capRadius) * 1.5
-    let localPos = cubeVertices.$[idx].mul(0.5)
-    localPos.z += 0.5
-    localPos = localPos.mul(vec3f(scale, scale, height))
+  })(
+    ({ idx, pos, height, lobes, stemRadius, capRadius, alpha, completion }) => {
+      const growth = easeOutSine(completion)
 
-    const entityPos = vec3f(pos, 0)
-    const worldPos = localPos.add(entityPos)
-    const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
-    return {
-      localPos,
-      worldPos,
-      clipPos,
+      const scale = max(stemRadius * growth, capRadius * growth) * 1.5
+      let localPos = cubeVertices.$[idx].mul(0.5)
+      localPos.z += 0.5
+      localPos = localPos.mul(vec3f(scale, scale, height * growth))
 
-      entityPos,
-      height,
-      lobes,
-      stemRadius,
-      capRadius,
-      alpha,
-    }
-  })
+      const entityPos = vec3f(pos, 0)
+      const worldPos = localPos.add(entityPos)
+      const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
+
+      return {
+        localPos,
+        worldPos,
+        clipPos,
+
+        entityPos,
+        height,
+        lobes,
+        stemRadius,
+        capRadius,
+        alpha,
+        completion,
+      }
+    },
+  )
 }
 
 function createFragmentProgram(
@@ -257,35 +278,48 @@ function createFragmentProgram(
       stemRadius: f32,
       capRadius: f32,
       alpha: f32,
+      completion: f32,
     },
     out: { color: vec4f, depth: builtin.fragDepth },
-  })(({ worldPos, entityPos, height, lobes, stemRadius, capRadius, alpha }) => {
-    const mushroom = MushroomStruct({
-      pos: entityPos,
+  })(
+    ({
+      worldPos,
+      entityPos,
       height,
       lobes,
       stemRadius,
       capRadius,
       alpha,
-    })
+      completion,
+    }) => {
+      const mushroom = MushroomStruct({
+        pos: entityPos,
+        height,
+        lobes,
+        stemRadius,
+        capRadius,
+        alpha,
+        completion,
+      })
 
-    const hit = raymarch(worldPos, entityPos, mushroom)
+      const hit = raymarch(worldPos, entityPos, mushroom)
 
-    if (DEBUG && !hit.hit)
-      return { color: vec4f(1, 0, 1, 1).mul(0.25), depth: 0 }
-    if (!hit.hit) return { color: vec4f(0), depth: 1 }
+      if (DEBUG && !hit.hit)
+        return { color: vec4f(1, 0, 1, 1).mul(0.25), depth: 0 }
+      if (!hit.hit) return { color: vec4f(0), depth: 1 }
 
-    const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
+      const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
 
-    const normal = calcNormal(hit.pos, entityPos, mushroom)
-    const diffuseValue = calcLighting(normal, hit.pos)
-    const color = calcColor(diffuseValue, 0.01, hit.pos, mushroom)
+      const normal = calcNormal(hit.pos, entityPos, mushroom)
+      const diffuseValue = calcLighting(normal, hit.pos)
+      const color = calcColor(diffuseValue, 0.01, hit.pos, mushroom)
 
-    return {
-      color: vec4f(color, 1).mul(alpha),
-      depth: hitClipPos.z / hitClipPos.w,
-    }
-  })
+      return {
+        color: vec4f(color, 1), //.mul(alpha),
+        depth: hitClipPos.z / hitClipPos.w,
+      }
+    },
+  )
 
   function raymarch(
     worldPos: v3f,
@@ -315,32 +349,51 @@ function createFragmentProgram(
     'use gpu'
     const localP = p.sub(entityPos)
 
-    const stalk = opSmoothUnion(
+    const growth = easeInSine(mushroom.completion)
+    const stemRadius = mushroom.stemRadius * growth
+    const capRadius = mushroom.capRadius * growth
+    const height = mushroom.height * growth
+
+    const stem = opSmoothUnion(
       sdCapsule(
         localP,
-        vec3f(0, 0, mushroom.stemRadius),
-        vec3f(0, 0, mushroom.height - mushroom.stemRadius),
-        mushroom.stemRadius,
+        vec3f(0, 0, stemRadius),
+        vec3f(0, 0, height - stemRadius),
+        stemRadius,
       ),
       sdCone(
-        rotateX(localP.sub(vec3f(0, 0, mushroom.height - 0.2)), -Math.PI / 2),
+        rotateX(localP.sub(vec3f(0, 0, height - 0.2)), -Math.PI / 2),
         0.15,
-        mushroom.height - 0.2,
+        height - 0.2,
       ),
       0.15,
     )
 
-    const capCenter = localP.sub(
-      vec3f(0, 0, mushroom.height - mushroom.capRadius),
-    )
-    let cap = sdSphere(capCenter, mushroom.capRadius)
+    const capCenter = localP.sub(vec3f(0, 0, height - capRadius))
+    let cap = sdSphere(capCenter, capRadius)
     cap = opSmoothDifference(
       cap,
-      sdBox3d(localP, vec3f(1, 1, mushroom.height - mushroom.capRadius * 0.4)),
+      sdBox3d(localP, vec3f(1, 1, height - capRadius * 0.4)),
       0.05,
     )
 
-    return opUnion(stalk, cap)
+    const expiryGrowth = clamp(
+      remap(mushroom.completion, 0.65, f32(1), f32(0), f32(1)),
+      f32(0),
+      f32(1),
+    )
+    const expiry = sdCapsule(
+      p,
+      mushroom.pos.sub(vec3f(0, 0, 100)),
+      mushroom.pos.add(
+        vec3f(0, 0, -capRadius + (capRadius + height * 1.25) * expiryGrowth),
+      ),
+      capRadius * expiryGrowth,
+    )
+
+    // return expiry
+    // return opUnion(stem, cap)
+    return opSmoothDifference(opUnion(stem, cap), expiry, 0.1)
   }
 
   function calcNormal(p: v3f, entityPos: v3f, mushroom: MushroomStruct): v3f {
@@ -373,7 +426,7 @@ function createFragmentProgram(
 
   function calcLighting(normal: v3f, hitPos: v3f): number {
     'use gpu'
-    const lightPos = cameraBuffer.$.targetPos
+    const lightPos = cameraBuffer.$.playerPos
     const lightDistance = lightPos.sub(hitPos)
     const lightDir = normalize(lightDistance)
     const diffuse =

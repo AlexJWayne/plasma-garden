@@ -20,6 +20,7 @@ export const CameraStruct = struct({
   viewMatrix: mat4x4f,
   pos: vec3f,
   targetPos: vec3f,
+  playerPos: vec3f,
 })
 
 export function setupCamera(root: TgpuRoot) {
@@ -52,5 +53,6 @@ export function positionCameraSystem(world: World) {
     viewMatrix,
     pos,
     targetPos: camera.target.current,
+    playerPos,
   })
 }

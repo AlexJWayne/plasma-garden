@@ -9,7 +9,7 @@ function createPerfEl() {
   perfEl.style.zIndex = '9999'
   perfEl.style.color = '#ffffff88'
   perfEl.style.fontSize = '14px'
-  perfEl.style.fontFamily = 'JetBrainsMono Nerd Font'
+  perfEl.style.fontFamily = 'monospace'
   perfEl.style.margin = '8px'
   return perfEl
 }
