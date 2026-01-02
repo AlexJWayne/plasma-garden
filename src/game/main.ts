@@ -1,11 +1,11 @@
 import { setKeyStateSystem } from '../input'
-import { createGridPositions } from '../lib/grid'
+import { createGridPositions, observeGrid } from '../lib/grid'
 import type { World } from '../main'
 import { listenForResize } from '../setup-webgpu'
 
 import { createRenderBackgroundSystem } from './background'
-import { createRenderBulletSystem } from './bullet'
 import { positionCameraSystem } from './camera'
+import { observeLifetimes } from './lifetime'
 import {
   createRenderMushroomSystem,
   expireMushroomsSystem,
@@ -19,12 +19,14 @@ import { updateWorldTimeSystem } from './time'
 export function startGame(world: World) {
   listenForResize(world)
 
+  observeGrid(world)
+  observeLifetimes(world)
+
   createGridPositions(world)
   createPlayerEntity(world)
 
   const renderPlayerSystem = createRenderPlayerSystem(world)
   const renderBackgroundSystem = createRenderBackgroundSystem(world)
-  const renderBulletSystem = createRenderBulletSystem(world)
   const renderMushroomSystem = createRenderMushroomSystem(world)
 
   function tick(timeMs: number) {
@@ -41,7 +43,6 @@ export function startGame(world: World) {
     positionCameraSystem(world)
     renderBackgroundSystem(world)
     renderPlayerSystem(world)
-    renderBulletSystem(world)
     renderMushroomSystem(world)
 
     requestAnimationFrame(tick)

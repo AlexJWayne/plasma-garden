@@ -6,7 +6,7 @@ import {
   sdCapsule,
   sdSphere,
 } from '@typegpu/sdf'
-import { addEntity, query, removeEntity } from 'bitecs'
+import { addEntity, query, removeEntity, set } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
   type Infer,
@@ -37,12 +37,7 @@ import {
 import { createInstanceBuffer } from '../lib/buffers'
 import { easeInCubic, easeInExpo, easeInSine, easeOutSine } from '../lib/ease'
 import { cubeVertices } from '../lib/geometry'
-import {
-  GridPosition,
-  getRandomEmptyGridPosition,
-  releaseGridPosition,
-  takeEmptyGridPosition,
-} from '../lib/grid'
+import { GridPosition, getRandomEmptyGridPosition } from '../lib/grid'
 import { hsl2rgb } from '../lib/hsl'
 import { createPipelinePerformanceCallback } from '../lib/pipeline-perf'
 import { remap } from '../lib/remap'
@@ -58,7 +53,7 @@ import type { World } from '../main'
 import { presentationFormat, sampleCount } from '../setup-webgpu'
 
 import { type CameraStruct } from './camera'
-import { Lifetime, getLifetimeCompletion } from './components'
+import { Lifetime, getLifetimeCompletion } from './lifetime'
 import { TimeStruct } from './time'
 
 const DEBUG = false
@@ -82,28 +77,28 @@ const MushroomStruct = struct({
 })
 type MushroomStruct = Infer<typeof MushroomStruct>
 
+const SPAWN_RATE = 0.05
+
 export function createMushroom(world: World) {
   const gridPosition = getRandomEmptyGridPosition(world)
   if (!gridPosition) return
 
-  takeEmptyGridPosition(world, gridPosition)
-
-  const eid = addEntity(world, GridPosition, Mushroom, Lifetime)
-  GridPosition[eid] = gridPosition
+  const eid = addEntity(
+    world,
+    set(GridPosition, gridPosition),
+    set(Lifetime, Math.random() * 30 + 15),
+    Mushroom,
+  )
   Mushroom[eid] = {
     height: Math.random() * 1.5 + 0.5,
     lobes: Math.floor(Math.random() * 8) + 3,
     stemRadius: Math.random() * 0.04 + 0.04,
     capRadius: Math.random() * 0.7 + 0.3,
   }
-  Lifetime[eid] = {
-    bornAt: world.time.elapsed,
-    duration: Math.random() * 30 + 15,
-  }
 }
 
 export function spawnMushroomsSystem(world: World) {
-  if (Math.random() < 0.05) createMushroom(world)
+  if (Math.random() < SPAWN_RATE) createMushroom(world)
 }
 
 export function expireMushroomsSystem(world: World) {
@@ -112,7 +107,6 @@ export function expireMushroomsSystem(world: World) {
     const { bornAt, duration } = Lifetime[eid]
     if (world.time.elapsed > bornAt + duration) {
       removeEntity(world, eid)
-      releaseGridPosition(world, GridPosition[eid])
     }
   }
 }
