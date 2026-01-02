@@ -1,4 +1,5 @@
-This is a WebGPU-based game/simulation built with TypeScript, using an Entity Component System (ECS) architecture via BitECS and GPU compute shaders via TypeGPU.
+This is a WebGPU-based toy built with TypeScript, Entity Component System (ECS), WebGPU. It's an experimental playground for learning
+and practicing with these technologies. It grows a garden of psychedelic plants in a grid.
 
 ## Project Overview
 
@@ -12,7 +13,7 @@ This is a WebGPU-based game/simulation built with TypeScript, using an Entity Co
 ### Primary Stack
 - **TypeScript 5.9.3** - Main language with strict type checking
 - **WebGPU** - GPU rendering and compute
-- **TypeGPU 0.8.2** - Type-safe WebGPU wrapper and shader compilation
+- **TypeGPU 0.9.0** - Type-safe WebGPU wrapper and shader compilation
 - **BitECS 0.4.0** - Entity Component System framework
 - **Vite** - Build tool
 
