@@ -17,7 +17,7 @@ export function hsl2rgb(hsl: v3f) {
   'use gpu'
   let rgb = vec3f()
 
-  if (hsl.y == 0.0) {
+  if (hsl.y === 0.0) {
     rgb = vec3f(hsl.z) // Luminance
   } else {
     let f2 = f32()

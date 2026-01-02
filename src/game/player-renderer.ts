@@ -30,7 +30,6 @@ import { presentationFormat, sampleCount } from '../setup-webgpu'
 import type { CameraStruct } from './camera'
 import { Player, Position, Velocity } from './components'
 import { PLAYER_HEIGHT, SIZE } from './player'
-import type { TimeStruct } from './time'
 
 const DEBUG = false
 
@@ -54,7 +53,6 @@ export function createRenderPlayerSystem(world: World) {
     )
     .withFragment(
       createFragmentProgram(
-        world.time.buffer.as('uniform'),
         world.camera.buffer.as('uniform'),
         playerBuffer.as('uniform'),
       ),
@@ -113,7 +111,6 @@ function createVertexProgram(
 }
 
 function createFragmentProgram(
-  timeBuffer: TgpuBufferUniform<typeof TimeStruct>,
   cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
   playerBuffer: TgpuBufferUniform<typeof PlayerStruct>,
 ) {
@@ -121,12 +118,7 @@ function createFragmentProgram(
     in: { worldPos: vec3f },
     out: { color: vec4f, depth: builtin.fragDepth },
   })(({ worldPos }) => {
-    const hit = raymarch(
-      cameraBuffer.$.pos,
-      worldPos,
-      playerBuffer.$,
-      timeBuffer.$.elapsed,
-    )
+    const hit = raymarch(cameraBuffer.$.pos, worldPos, playerBuffer.$)
 
     if (DEBUG && !hit.hit) return { color: vec4f(1, 0, 1, 1), depth: 0 }
     if (!hit.hit) return { color: vec4f(0), depth: 1 }
@@ -140,7 +132,7 @@ function createFragmentProgram(
   })
 }
 
-function scene(p: v3f, player: PlayerStruct, time: number): number {
+function scene(p: v3f, player: PlayerStruct): number {
   'use gpu'
   const centeredP = player.inverseTransform.mul(vec4f(p, 1)).xyz
 
@@ -152,12 +144,7 @@ function scene(p: v3f, player: PlayerStruct, time: number): number {
 const Hit = struct({ hit: bool, pos: vec3f })
 type Hit = Infer<typeof Hit>
 
-function raymarch(
-  cameraPos: v3f,
-  worldPos: v3f,
-  player: PlayerStruct,
-  time: number,
-): Hit {
+function raymarch(cameraPos: v3f, worldPos: v3f, player: PlayerStruct): Hit {
   'use gpu'
 
   const MAX_DISTANCE = f32(20)
@@ -170,7 +157,7 @@ function raymarch(
 
   for (let i = 0; i < MAX_STEPS; i++) {
     const point = cameraPos.add(rayDirection.mul(totalDistance))
-    const distance = scene(point, player, time)
+    const distance = scene(point, player)
 
     if (distance < EPSILON) return Hit({ hit: true, pos: point })
     if (distance > MAX_DISTANCE) break

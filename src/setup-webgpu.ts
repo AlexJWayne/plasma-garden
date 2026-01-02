@@ -5,7 +5,7 @@ import type { World } from './main'
 export const presentationFormat = navigator.gpu.getPreferredCanvasFormat()
 export const depthFormat: GPUTextureFormat = 'depth24plus'
 
-const supersampling = 2
+const supersampling = 1
 
 // MSAA sample count: 1 (disabled), 4 (recommended), or 8 (high quality)
 export const sampleCount = 4

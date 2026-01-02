@@ -124,20 +124,20 @@ export function easeInOutQuint(t: number): number {
 
 export function easeInExpo(t: number): number {
   'use gpu'
-  if (t == 0) return 0
+  if (t === 0) return 0
   return pow(2, 10 * t - 10)
 }
 
 export function easeOutExpo(t: number): number {
   'use gpu'
-  if (t == 1) return 1
+  if (t === 1) return 1
   return 1 - pow(2, -10 * t)
 }
 
 export function easeInOutExpo(t: number): number {
   'use gpu'
-  if (t == 0) return 0
-  if (t == 1) return 1
+  if (t === 0) return 0
+  if (t === 1) return 1
   if (t < 0.5) {
     return pow(2, 20 * t - 10) / 2
   }
@@ -199,24 +199,24 @@ export function easeInOutBack(t: number): number {
 export function easeInElastic(t: number): number {
   'use gpu'
   const c4 = (2 * Math.PI) / 3
-  if (t == 0) return 0
-  if (t == 1) return 1
+  if (t === 0) return 0
+  if (t === 1) return 1
   return -pow(2, 10 * t - 10) * sin((t * 10 - 10.75) * c4)
 }
 
 export function easeOutElastic(t: number): number {
   'use gpu'
   const c4 = (2 * Math.PI) / 3
-  if (t == 0) return 0
-  if (t == 1) return 1
+  if (t === 0) return 0
+  if (t === 1) return 1
   return pow(2, -10 * t) * sin((t * 10 - 0.75) * c4) + 1
 }
 
 export function easeInOutElastic(t: number): number {
   'use gpu'
   const c5 = (2 * Math.PI) / 4.5
-  if (t == 0) return 0
-  if (t == 1) return 1
+  if (t === 0) return 0
+  if (t === 1) return 1
   if (t < 0.5) {
     return -(pow(2, 20 * t - 10) * sin((20 * t - 11.125) * c5)) / 2
   }
