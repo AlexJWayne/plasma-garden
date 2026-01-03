@@ -105,16 +105,6 @@ export function spawnMushroomsSystem(world: World) {
   if (Math.random() < SPAWN_RATE) createMushroom(world)
 }
 
-export function expireMushroomsSystem(world: World) {
-  const mushrooms = query(world, [Mushroom, Lifetime, GridPosition])
-  for (const eid of mushrooms) {
-    const { bornAt, duration } = Lifetime[eid]
-    if (world.time.elapsed > bornAt + duration) {
-      removeEntity(world, eid)
-    }
-  }
-}
-
 export function createRenderMushroomSystem(world: World) {
   const [mushroomsBuffer, mushroomsLayout] = createInstanceBuffer(
     world,
@@ -132,12 +122,7 @@ export function createRenderMushroomSystem(world: World) {
         world.time.buffer.as('uniform'),
         world.camera.buffer.as('uniform'),
       ),
-      {
-        color: {
-          format: presentationFormat,
-          blend: blending.normal,
-        },
-      },
+      { color: { format: presentationFormat, blend: blending.normal } },
     )
     .withDepthStencil(depthStencil)
     .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })

@@ -1,7 +1,19 @@
-import { addEntity, query, removeEntity, set } from 'bitecs'
-import { type Infer, f32, struct, vec3f } from 'typegpu/data'
+import { addEntity, query, set } from 'bitecs'
+import tgpu, { type TgpuBufferUniform } from 'typegpu'
+import { type Infer, builtin, f32, struct, vec3f, vec4f } from 'typegpu/data'
 
+import { createInstanceBuffer } from '../../lib/buffers'
+import { cubeVertex, cubeVertices } from '../../lib/geometry'
+import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
+import {
+  blending,
+  createColorAttachment,
+  createDepthAttachment,
+  depthStencil,
+} from '../../lib/web-gpu'
 import type { World } from '../../main'
+import { presentationFormat, sampleCount } from '../../setup-webgpu'
+import type { CameraStruct } from '../game/camera'
 import { GridPosition, getRandomEmptyGridPosition } from '../general/grid'
 import { Lifetime } from '../general/lifetime'
 
@@ -28,19 +40,96 @@ export function createKelp(world: World) {
     set(Lifetime, Math.random() * 10 + 5),
     Kelp,
   )
-  Kelp[eid] = { height: Math.random() * 4 + 2 }
+  Kelp[eid] = { height: Math.random() * 2 + 2 }
 }
 
 export function spawnKelpSystem(world: World) {
   if (Math.random() < SPAWN_RATE) createKelp(world)
 }
 
-export function expireKelpSystem(world: World) {
-  const mushrooms = query(world, [Kelp, Lifetime, GridPosition])
-  for (const eid of mushrooms) {
-    const { bornAt, duration } = Lifetime[eid]
-    if (world.time.elapsed > bornAt + duration) {
-      removeEntity(world, eid)
-    }
+export function createRenderKelpSystem(world: World) {
+  const [kelpsBuffer, kelpsLayout] = createInstanceBuffer(
+    world,
+    KelpStruct,
+    1000,
+  )
+
+  const pipeline = world.root['~unstable']
+    .withVertex(
+      createVertexProgram(world.camera.buffer.as('uniform')),
+      kelpsLayout.attrib,
+    )
+    .withFragment(createFragmentProgram(), {
+      color: { format: presentationFormat, blend: blending.normal },
+    })
+    .withDepthStencil(depthStencil)
+    .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
+    .withMultisample({ count: sampleCount })
+    .createPipeline()
+    .with(kelpsLayout, kelpsBuffer)
+    .withPerformanceCallback(createPipelinePerformanceCallback('kelps'))
+
+  function render(world: World) {
+    const kelps = query(world, [Kelp, GridPosition])
+    if (kelps.length === 0) return
+
+    kelpsBuffer.writePartial(
+      [...kelps].map((eid, idx) => ({
+        idx,
+        value: {
+          height: Kelp[eid].height,
+          pos: vec3f(GridPosition[eid], 0),
+        },
+      })),
+    )
+
+    pipeline
+      .withColorAttachment({ color: createColorAttachment(world) })
+      .withDepthStencilAttachment(createDepthAttachment(world))
+      .draw(cubeVertices.$.length, kelps.length)
   }
+
+  return render
+}
+
+function createVertexProgram(
+  cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
+) {
+  return tgpu['~unstable'].vertexFn({
+    in: {
+      idx: builtin.vertexIndex,
+      pos: vec3f,
+      height: f32,
+    },
+    out: {
+      localPos: vec3f,
+      worldPos: vec3f,
+      clipPos: builtin.position,
+    },
+  })(({ idx, pos, height }) => {
+    const localPos = cubeVertex(idx, 0.25, 0, height)
+    const worldPos = localPos.add(vec3f(pos))
+    const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
+    return {
+      localPos,
+      worldPos,
+      clipPos,
+    }
+  })
+}
+
+function createFragmentProgram() {
+  return tgpu['~unstable'].fragmentFn({
+    in: {
+      localPos: vec3f,
+      worldPos: vec3f,
+      clipPos: builtin.position,
+    },
+    out: {
+      color: vec4f,
+    },
+  })(() => {
+    const color = vec4f(0.0, 0.5, 0.0, 1.0)
+    return { color }
+  })
 }

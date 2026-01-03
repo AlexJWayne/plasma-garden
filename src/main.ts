@@ -9,11 +9,17 @@ import {
 } from './components/game/player'
 import { createRenderPlayerSystem } from './components/game/player-renderer'
 import { createGridPositions, observeGrid } from './components/general/grid'
-import { observeLifetimes } from './components/general/lifetime'
+import {
+  killExpiredLifetimesSystem,
+  observeLifetimes,
+} from './components/general/lifetime'
 import { physicsSystem } from './components/general/physics'
 import {
+  createRenderKelpSystem,
+  spawnKelpSystem,
+} from './components/organisms/kelp'
+import {
   createRenderMushroomSystem,
-  expireMushroomsSystem,
   spawnMushroomsSystem,
 } from './components/organisms/mushroom'
 import { setupInput } from './input'
@@ -49,6 +55,7 @@ export function startGame(world: World) {
   const renderPlayerSystem = createRenderPlayerSystem(world)
   const renderBackgroundSystem = createRenderBackgroundSystem(world)
   const renderMushroomSystem = createRenderMushroomSystem(world)
+  const renderKelpSystem = createRenderKelpSystem(world)
 
   function tick(timeMs: number) {
     updateWorldTimeSystem(world, timeMs)
@@ -57,7 +64,9 @@ export function startGame(world: World) {
     physicsSystem(world)
 
     spawnMushroomsSystem(world)
-    expireMushroomsSystem(world)
+    spawnKelpSystem(world)
+
+    killExpiredLifetimesSystem(world)
 
     setKeyStateSystem()
 
@@ -65,6 +74,7 @@ export function startGame(world: World) {
     renderBackgroundSystem(world)
     renderPlayerSystem(world)
     renderMushroomSystem(world)
+    renderKelpSystem(world)
 
     requestAnimationFrame(tick)
   }
