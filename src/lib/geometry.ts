@@ -55,15 +55,8 @@ export const cubeVertices = tgpu.const(arrayOf(vec3f, 36), [
   vec3f(-1, -1, -1),
 ])
 
-export function cubeVertex(
-  idx: number,
-  width: number,
-  down: number,
-  up: number,
-): v3f {
+export function cubeVertex(idx: number, width: number, height: number): v3f {
   'use gpu'
   let pos = cubeVertices.$[idx].mul(0.5).add(vec3f(0, 0, 0.5))
-  return pos
-    .mul(vec3f(width, width, down + up)) //
-    .sub(vec3f(0, 0, down))
+  return pos.mul(vec3f(width, width, height)) //
 }

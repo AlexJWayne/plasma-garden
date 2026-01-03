@@ -15,7 +15,7 @@ import type { World } from '../../main'
 import { presentationFormat, sampleCount } from '../../setup-webgpu'
 import type { CameraStruct } from '../game/camera'
 import { GridPosition, getRandomEmptyGridPosition } from '../general/grid'
-import { Lifetime } from '../general/lifetime'
+import { Lifetime, getLifetimeCompletion } from '../general/lifetime'
 
 type Kelp = {
   height: number
@@ -25,6 +25,7 @@ const Kelp = [] as Kelp[]
 const KelpStruct = struct({
   pos: vec3f,
   height: f32,
+  growth: f32,
 })
 type KelpStruct = Infer<typeof KelpStruct>
 
@@ -40,7 +41,7 @@ export function createKelp(world: World) {
     set(Lifetime, Math.random() * 10 + 5),
     Kelp,
   )
-  Kelp[eid] = { height: Math.random() * 2 + 2 }
+  Kelp[eid] = { height: Math.random() * 3 + 3 }
 }
 
 export function spawnKelpSystem(world: World) {
@@ -70,7 +71,7 @@ export function createRenderKelpSystem(world: World) {
     .withPerformanceCallback(createPipelinePerformanceCallback('kelps'))
 
   function render(world: World) {
-    const kelps = query(world, [Kelp, GridPosition])
+    const kelps = query(world, [Kelp, GridPosition, Lifetime])
     if (kelps.length === 0) return
 
     kelpsBuffer.writePartial(
@@ -79,6 +80,7 @@ export function createRenderKelpSystem(world: World) {
         value: {
           height: Kelp[eid].height,
           pos: vec3f(GridPosition[eid], 0),
+          growth: getLifetimeCompletion(world, eid),
         },
       })),
     )
@@ -100,14 +102,15 @@ function createVertexProgram(
       idx: builtin.vertexIndex,
       pos: vec3f,
       height: f32,
+      growth: f32,
     },
     out: {
       localPos: vec3f,
       worldPos: vec3f,
       clipPos: builtin.position,
     },
-  })(({ idx, pos, height }) => {
-    const localPos = cubeVertex(idx, 0.25, 0, height)
+  })(({ idx, pos, height, growth }) => {
+    const localPos = cubeVertex(idx, 1 - growth, height * growth)
     const worldPos = localPos.add(vec3f(pos))
     const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
     return {

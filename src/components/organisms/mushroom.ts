@@ -6,7 +6,7 @@ import {
   sdCapsule,
   sdSphere,
 } from '@typegpu/sdf'
-import { addEntity, query, removeEntity, set } from 'bitecs'
+import { addEntity, query, set } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
   type Infer,
@@ -41,7 +41,7 @@ import {
   easeInSine,
   easeOutSine,
 } from '../../lib/ease'
-import { cubeVertices } from '../../lib/geometry'
+import { cubeVertex, cubeVertices } from '../../lib/geometry'
 import { hsl2rgb } from '../../lib/hsl'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { remap } from '../../lib/remap'
@@ -195,9 +195,7 @@ function createVertexProgram(
       const growth = easeOutSine(completion)
 
       const scale = max(stemRadius * growth, capRadius * growth) * 1.5
-      let localPos = cubeVertices.$[idx].mul(0.5)
-      localPos.z += 0.5
-      localPos = localPos.mul(vec3f(scale, scale, height * growth))
+      let localPos = cubeVertex(idx, scale, height * growth)
 
       const entityPos = vec3f(pos, 0)
       const worldPos = localPos.add(entityPos)
