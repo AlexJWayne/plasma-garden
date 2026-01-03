@@ -16,7 +16,6 @@ import {
 import { length, normalize } from 'typegpu/std'
 import { mat4 } from 'wgpu-matrix'
 
-import type { CameraStruct } from '../../camera'
 import { cubeVertices } from '../../lib/geometry'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import {
@@ -29,6 +28,7 @@ import type { World } from '../../main'
 import { presentationFormat, sampleCount } from '../../setup-webgpu'
 import { Position, Velocity } from '../general/physics'
 
+import { CameraStruct, worldToClipSpace } from './camera'
 import { PLAYER_HEIGHT, Player, SIZE } from './player'
 
 const DEBUG = false
@@ -102,7 +102,7 @@ function createVertexProgram(
     const worldPos = playerBuffer.$.transform.mul(
       vec4f(localPos.add(vec3f(0, 0, PLAYER_HEIGHT)), 1),
     )
-    const clipPos = cameraBuffer.$.viewMatrix.mul(worldPos)
+    const clipPos = worldToClipSpace(cameraBuffer.$, worldPos.xyz)
     return {
       worldPos: worldPos.xyz,
       clipPos,

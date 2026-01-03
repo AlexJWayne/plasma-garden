@@ -13,7 +13,7 @@ import {
 } from '../../lib/web-gpu'
 import type { World } from '../../main'
 import { presentationFormat, sampleCount } from '../../setup-webgpu'
-import type { CameraStruct } from '../game/camera'
+import { type CameraStruct, worldToClipSpace } from '../game/camera'
 import { GridPosition, getRandomEmptyGridPosition } from '../general/grid'
 import { Lifetime, getLifetimeCompletion } from '../general/lifetime'
 
@@ -110,9 +110,9 @@ function createVertexProgram(
       clipPos: builtin.position,
     },
   })(({ idx, pos, height, growth }) => {
-    const localPos = cubeVertex(idx, 1 - growth, height * growth)
+    const localPos = cubeVertex(idx, 0.9 * (1 - growth), height * growth)
     const worldPos = localPos.add(vec3f(pos))
-    const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
+    const clipPos = worldToClipSpace(cameraBuffer.$, worldPos)
     return {
       localPos,
       worldPos,

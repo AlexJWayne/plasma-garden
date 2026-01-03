@@ -1,6 +1,13 @@
 import { query } from 'bitecs'
-import { type TgpuRoot } from 'typegpu'
-import { mat4x4f, struct, vec3f } from 'typegpu/data'
+import { type TgpuBufferUniform, type TgpuRoot } from 'typegpu'
+import {
+  type Infer,
+  mat4x4f,
+  struct,
+  type v3f,
+  vec3f,
+  vec4f,
+} from 'typegpu/data'
 import { mat4 } from 'wgpu-matrix'
 
 import { lookAt } from '../../lib/matrix'
@@ -55,4 +62,12 @@ export function positionCameraSystem(world: World) {
     targetPos: camera.target.current,
     playerPos,
   })
+}
+
+export function worldToClipSpace(
+  cameraBuffer: Infer<typeof CameraStruct>,
+  pos: v3f,
+) {
+  'use gpu'
+  return cameraBuffer.viewMatrix.mul(vec4f(pos, 1))
 }

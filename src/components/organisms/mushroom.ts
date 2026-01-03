@@ -56,7 +56,7 @@ import {
 import type { World } from '../../main'
 import { presentationFormat, sampleCount } from '../../setup-webgpu'
 import type { TimeStruct } from '../../time'
-import type { CameraStruct } from '../game/camera'
+import { type CameraStruct, worldToClipSpace } from '../game/camera'
 import { GridPosition, getRandomEmptyGridPosition } from '../general/grid'
 import { Lifetime, getLifetimeCompletion } from '../general/lifetime'
 
@@ -199,7 +199,7 @@ function createVertexProgram(
 
       const entityPos = vec3f(pos, 0)
       const worldPos = localPos.add(entityPos)
-      const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
+      const clipPos = worldToClipSpace(cameraBuffer.$, worldPos)
 
       return {
         localPos,

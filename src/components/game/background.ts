@@ -35,7 +35,7 @@ import {
 import type { World } from '../../main'
 import { presentationFormat, sampleCount } from '../../setup-webgpu'
 
-import { CameraStruct } from './camera'
+import { CameraStruct, worldToClipSpace } from './camera'
 
 export function createRenderBackgroundSystem(world: World) {
   const renderPipeline = world.root['~unstable']
@@ -78,7 +78,7 @@ function createVertexProgram(
   })(({ idx }) => {
     const uv = quadVertices.$[idx]
     const worldPos = vec3f(uv.mul(10.5), 0)
-    const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
+    const clipPos = worldToClipSpace(cameraBuffer.$, worldPos)
     return {
       worldPos,
       clipPos,
