@@ -396,7 +396,7 @@ function createFragmentProgram(
     const viewDir = normalize(cameraBuffer.$.pos.sub(hitPos))
     const specular = pow(
       max(dot(reflect(lightDir.mul(-1), normal), viewDir), 0),
-      32,
+      64,
     )
     return diffuse * 0.5 + specular
   }
@@ -416,11 +416,13 @@ function createFragmentProgram(
 
     const angle = atan2(hitPos.y - mushroom.pos.y, hitPos.x - mushroom.pos.x)
 
-    const glowZFactor = easeInExpo(hitPos.z / mushroom.height)
-    const glowZ = glowZFactor * mushroom.height
+    const glowZFactor = easeInCubic(
+      hitPos.z / (mushroom.height * mushroom.completion),
+    )
+    const glowZ = glowZFactor * (mushroom.height * mushroom.completion)
 
     let glowValue =
-      (glowZ + sin(angle * mushroom.lobes) * 0.01) * 0.7 +
+      (glowZ + sin(angle * mushroom.lobes) * 0.01) * 2 +
       timeBuffer.$.elapsed * 0.1 +
       mushroom.pos.x +
       mushroom.pos.y
