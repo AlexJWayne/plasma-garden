@@ -38,3 +38,8 @@ export function opIntersection(a: number, b: number): number {
   'use gpu'
   return max(a, b)
 }
+
+export function opUnion(a: number, b: number): number {
+  'use gpu'
+  return min(a, b)
+}

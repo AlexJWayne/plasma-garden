@@ -1,5 +1,5 @@
 import { query } from 'bitecs'
-import { type TgpuBufferUniform, type TgpuRoot } from 'typegpu'
+import { type TgpuRoot } from 'typegpu'
 import {
   type Infer,
   mat4x4f,
