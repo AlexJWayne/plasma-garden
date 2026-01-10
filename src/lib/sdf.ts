@@ -1,6 +1,7 @@
 import type { v3f } from 'typegpu/data'
-import { vec2f } from 'typegpu/data'
+import { vec2f, vec3f } from 'typegpu/data'
 import {
+  abs,
   clamp,
   cos,
   dot,
@@ -32,6 +33,17 @@ export function sdCone(p: v3f, angle: number, h: number): number {
   const d = min(dot(a, a), dot(b, b))
   const s = max(k * (w.x * q.y - w.y * q.x), k * (w.y - q.y))
   return sqrt(d) * sign(s)
+}
+
+export function sdLink(
+  p: v3f,
+  linkLength: number,
+  r1: number,
+  r2: number,
+): number {
+  'use gpu'
+  const q = vec3f(p.x, max(abs(p.y) - linkLength, 0.0), p.z)
+  return length(vec2f(length(q.xy) - r1, q.z)) - r2
 }
 
 export function opIntersection(a: number, b: number): number {

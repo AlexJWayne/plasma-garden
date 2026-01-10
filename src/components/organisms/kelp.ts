@@ -1,4 +1,12 @@
-import { opSmoothUnion, opUnion, sdBox3d, sdCapsule } from '@typegpu/sdf'
+import {
+  opExtrudeX,
+  opExtrudeY,
+  opSmoothUnion,
+  opUnion,
+  sdBox3d,
+  sdCapsule,
+  sdLine,
+} from '@typegpu/sdf'
 import { addEntity, query, set } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
@@ -34,6 +42,7 @@ import {
   calcSpecularLighting,
 } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
+import { sdLink } from '../../lib/sdf'
 import { rotate2d } from '../../lib/transform'
 import {
   blending,
@@ -164,10 +173,15 @@ function createFragmentProgram(
 ) {
   const MAX_DISTANCE = f32(100)
   const MAX_STEPS = 100
-  const EPSILON = 0.001
+  const EPSILON = 0.003
 
   const Hit = struct({ hit: bool, pos: vec3f })
   type Hit = Infer<typeof Hit>
+
+  // Handy primes for randomy feeling things.
+  const prime3k = Math.sqrt(3) * 1000
+  const prime7k = Math.sqrt(7) * 1000
+  const prime17k = Math.sqrt(17) * 1000
 
   const main = tgpu['~unstable'].fragmentFn({
     in: {
@@ -193,13 +207,13 @@ function createFragmentProgram(
 
     const color = calcLighting(
       SpecularLighting({
-        lightPos: cameraBuffer.$.pos,
+        lightPos: cameraBuffer.$.playerPos,
         surfacePos: hit.pos,
         normal: calcNormal(hit.pos, kelp),
         cameraPos: cameraBuffer.$.pos,
         shininess: f32(32),
       }),
-      vec3f(0, 1, 0),
+      calcDiffuseColor(hit.pos),
 
       vec3f(1),
     )
@@ -209,6 +223,11 @@ function createFragmentProgram(
       depth: hitClipPos.z / hitClipPos.w,
     }
   })
+
+  function calcDiffuseColor(hitPos: v3f): v3f {
+    'use gpu'
+    return vec3f(0.2, 0.9, 0.4)
+  }
 
   function raymarch(worldPos: v3f, kelp: KelpStruct): Hit {
     'use gpu'
@@ -239,20 +258,42 @@ function createFragmentProgram(
 
     const twistAngle =
       localP.z + //
-      kelp.entityPos.x * 1377.375 +
-      kelp.entityPos.y * 3737.37
+      kelp.entityPos.x * prime7k +
+      kelp.entityPos.y * prime17k +
+      kelp.height * prime3k +
+      kelp.entityPos.x * kelp.entityPos.y * 0.123 // breaks symmetry
+
     const twistedP = vec3f(rotate2d(localP.xy, twistAngle), localP.z)
 
     const radius = narrowness * 0.4
+    const r2 = radius * 0.05
 
-    const left = sdSideRail(twistedP, kelp, radius, f32(-1))
-    const right = sdSideRail(twistedP, kelp, radius, f32(1))
-    const center = sdBox3d(
+    // const left = sdSideRail(twistedP, kelp, radius, f32(-1))
+    // const right = sdSideRail(twistedP, kelp, radius, f32(1))
+    // const sides = sdLink(
+    //   vec3f(twistedP.x, rotate2d(vec2f(twistedP.y, height / 2), Math.PI / 2)),
+    //   height * 0.4 - radius - r2,
+    //   radius,
+    //   r2,
+    // )
+
+    const center = opExtrudeY(
       twistedP,
-      vec3f(radius, 0.01 * narrowness, height - radius * 1.25),
+      sdLine(
+        twistedP.xz,
+        vec2f(0, -radius - r2), //
+        vec2f(0, height - radius - r2),
+      ) - radius,
+      0.01,
     )
+    return center
+    // return sides
+    // const center = sdBox3d(
+    //   twistedP,
+    //   vec3f(radius, 0.01 * narrowness, height - radius * 1.25),
+    // )
 
-    return opSmoothUnion(opUnion(left, right), center, 0.2 * narrowness)
+    // return opSmoothUnion(sides, center, 0.3 * narrowness)
   }
 
   function sdSideRail(p: v3f, kelp: KelpStruct, radius: number, side: number) {
