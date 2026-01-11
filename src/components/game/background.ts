@@ -11,22 +11,12 @@ import {
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import {
-  clamp,
-  dot,
-  length,
-  max,
-  mix,
-  normalize,
-  pow,
-  reflect,
-  round,
-} from 'typegpu/std'
+import { clamp, length, mix, normalize, round } from 'typegpu/std'
 
 import { dither } from '../../lib/dither'
 import { quadVertices } from '../../lib/geometry'
+import { SpecularLighting, calcLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
-import { remap } from '../../lib/remap'
 import {
   createColorAttachment,
   createDepthAttachment,
@@ -108,8 +98,18 @@ function createFragmentProgram(
   })(({ worldPos, clipPos }) => {
     const hit = raymarch(worldPos)
     if (hit.hit) {
-      const lighting = calcLighting(calcNormal(hit.pos), hit.pos)
-      const color = getColor(hit.pos).mul(lighting)
+      const normal = calcNormal(hit.pos)
+      const color = calcLighting(
+        SpecularLighting({
+          lightPos: cameraBuffer.$.playerPos,
+          surfacePos: hit.pos,
+          normal,
+          cameraPos: cameraBuffer.$.pos,
+          shininess: f32(32),
+        }),
+        getColor(hit.pos).mul(0.8),
+        vec3f(0.1),
+      )
       return vec4f(dither(color, clipPos.xy), 1)
     }
     return vec4f(vec3f(0.2), 1)
@@ -132,22 +132,6 @@ function createFragmentProgram(
     const repeatedP = vec2f(hitPos.xy.sub(round(hitPos.xy.div(1))))
     const d = clamp(sdBox2d(repeatedP, vec2f(0.35)) * 6, 0, 1)
     return mix(COLOR.mul(0.5), COLOR, d)
-  }
-
-  function calcLighting(normal: v3f, hitPos: v3f): number {
-    'use gpu'
-    const lightPos = cameraBuffer.$.playerPos
-    const lightDistance = lightPos.sub(hitPos)
-    const lightDir = normalize(lightDistance)
-    const diffuse =
-      max(dot(normal, lightDir), 0) *
-      remap(length(lightDistance), f32(2), f32(8), f32(1), f32(0))
-    const viewDir = normalize(cameraBuffer.$.pos.sub(hitPos))
-    const specular = pow(
-      max(dot(reflect(lightDir.mul(-1), normal), viewDir), 0),
-      32,
-    )
-    return diffuse * 0.8 + specular * 0.2
   }
 
   function raymarch(worldPos: v3f): Hit {
