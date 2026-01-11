@@ -43,15 +43,27 @@ and practicing with these technologies. It grows a garden of psychedelic plants 
 - All of the above is enforced by Prettier.
 
 ### ECS Architecture Patterns
-- **Components**: Pure data arrays (no methods)
-- **Systems**: Functions that operate on component arrays
+- **Systems**: Functions that operate on component arrays and are always suffixed with `System`.
 - **World**: Central state container with all systems and resources
 - **Entities**: Numeric IDs managed by BitECS
+- **Components**: Pure data arrays (no methods). This pattern is used to create a
+  component with an object the component data, so the component used in ECS and
+  the data for each component have the same name.
+
+```ts
+// Example component declaration
+type MyComponent = {
+  a: number
+  b: v3f
+}
+const MyComponent = [] as MyComponent[]
+```
+
 
 ### TypeGPU
 
 - **Vectors**: Always uses vector creation functions from `typegpu/data`.
-- **Math**: Always uses math functions from `typegpu/std` where possible to let those functions potentially be used in shaders.
+- **Math**: Always uses math functions from `typegpu/std` where possible to let those functions potentially be used in shaders (i.e. `position.add(velocity))`. Always use normal math operators for plain scalar numbers (`position.x + velocity.y`). 
 - **Use GPU directives**: Uses `'use gpu'` directives in any pure math function that might be run on the GPU.
 
 ## Development Guidelines

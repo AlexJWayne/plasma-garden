@@ -12,12 +12,13 @@ import {
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import { abs, fract, length, max, mix, normalize, sin, step } from 'typegpu/std'
+import { abs, length, mix, normalize, sin, step } from 'typegpu/std'
 
 import { createInstanceBuffer } from '../../lib/buffers'
 import { cubeVertex, cubeVertices } from '../../lib/geometry'
 import { SpecularLighting, calcLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
+import { randomRange } from '../../lib/random'
 import { rotate2d } from '../../lib/transform'
 import {
   blending,
@@ -45,20 +46,20 @@ type KelpStruct = Infer<typeof KelpStruct>
 
 const SPAWN_RATE = 0.05
 
-export function createKelp(world: World) {
+export function createKelp(world: World): void {
   const gridPosition = getRandomEmptyGridPosition(world)
   if (!gridPosition) return
 
   const eid = addEntity(
     world,
     set(GridPosition, gridPosition),
-    set(Lifetime, Math.random() * 20 + 10),
+    set(Lifetime, randomRange(10, 30)),
     Kelp,
   )
-  Kelp[eid] = { height: Math.random() * 3 + 3 }
+  Kelp[eid] = { height: randomRange(3, 6) }
 }
 
-export function spawnKelpSystem(world: World) {
+export function spawnKelpSystem(world: World): void {
   if (Math.random() < SPAWN_RATE) createKelp(world)
 }
 
@@ -254,17 +255,15 @@ function createFragmentProgram(
     const height = kelp.height * kelp.growth
 
     const radius = narrowness * 0.4
-    const r2 = radius * 0.05
 
-    const center = opExtrudeY(
-      twistedP,
+    const flatRibbonD =
       sdLine(
         twistedP.xz,
-        vec2f(0, -radius - r2), //
-        vec2f(0, height - radius - r2),
-      ) - radius,
-      0.01,
-    )
+        vec2f(0, -radius), //
+        vec2f(0, height - radius),
+      ) - radius
+
+    const center = opExtrudeY(twistedP, flatRibbonD, 0.01)
     return center
   }
 
