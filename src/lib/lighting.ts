@@ -1,10 +1,26 @@
 import { type Infer, f32, struct, type v3f, vec3f } from 'typegpu/data'
-import { add, clamp, dot, length, max, normalize } from 'typegpu/std'
+import { add, clamp, dot, length, max, normalize, saturate } from 'typegpu/std'
 
 import { remap } from './remap'
 
 const FALLOFF_START = f32(2)
 const FALLOFF_END = f32(10)
+
+export const Surface = struct({
+  diffuse: vec3f,
+  specular: vec3f,
+  emissive: vec3f,
+  shininess: f32,
+})
+export type Surface = Infer<typeof Surface>
+
+export const LightingPositions = struct({
+  cameraPos: vec3f,
+  lightPos: vec3f,
+  surfacePos: vec3f,
+  normal: vec3f,
+})
+export type LightingPositions = Infer<typeof LightingPositions>
 
 export const DiffuseLighting = struct({
   lightPos: vec3f,
@@ -101,4 +117,24 @@ export function calcLighting(
     vec3f(0),
     vec3f(1),
   )
+}
+
+export function calcSurfaceLighting(
+  surface: Surface,
+  lighting: LightingPositions,
+): v3f {
+  'use gpu'
+  const color = calcLighting(
+    SpecularLighting({
+      cameraPos: lighting.cameraPos,
+      lightPos: lighting.lightPos,
+      surfacePos: lighting.surfacePos,
+      normal: lighting.normal,
+      shininess: surface.shininess,
+    }),
+    surface.diffuse,
+    surface.specular,
+  )
+
+  return saturate(color.add(surface.emissive))
 }

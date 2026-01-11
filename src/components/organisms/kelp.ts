@@ -1,3 +1,4 @@
+import { perlin3d } from '@typegpu/noise'
 import { opExtrudeY, sdLine } from '@typegpu/sdf'
 import { addEntity, query, set } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
@@ -12,11 +13,18 @@ import {
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import { abs, length, mix, normalize, sin, step } from 'typegpu/std'
+import { abs, length, normalize, saturate, sin, smoothstep } from 'typegpu/std'
 
 import { createInstanceBuffer } from '../../lib/buffers'
 import { cubeVertex, cubeVertices } from '../../lib/geometry'
-import { SpecularLighting, calcLighting } from '../../lib/lighting'
+import { hsl2rgb } from '../../lib/hsl'
+import {
+  LightingPositions,
+  SpecularLighting,
+  Surface,
+  calcLighting,
+  calcSurfaceLighting,
+} from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { randomRange } from '../../lib/random'
 import { rotate2d } from '../../lib/transform'
@@ -181,17 +189,14 @@ function createFragmentProgram(
 
     const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
 
-    const color = calcLighting(
-      SpecularLighting({
+    const color = calcSurfaceLighting(
+      calcSurfaceColors(hit.twistedP, kelp),
+      LightingPositions({
+        cameraPos: cameraBuffer.$.pos,
         lightPos: cameraBuffer.$.playerPos,
         surfacePos: hit.pos,
         normal: calcNormal(hit.pos, kelp),
-        cameraPos: cameraBuffer.$.pos,
-        shininess: f32(32),
       }),
-      calcDiffuseColor(hit.twistedP, kelp),
-
-      vec3f(1),
     )
 
     return {
@@ -200,15 +205,41 @@ function createFragmentProgram(
     }
   })
 
-  function calcDiffuseColor(twistedP: v3f, kelp: KelpStruct): v3f {
+  function calcSurfaceColors(twistedP: v3f, kelp: KelpStruct): Surface {
     'use gpu'
 
     const p = twistedP.xz
 
     const amplitude = sin((p.y - kelp.growth * 2) * 20) * 0.025
-    const dToWave = 1 - step(0.02, abs(p.x - amplitude))
+    const waveD = abs(p.x - amplitude)
+    const waveGlow = smoothstep(0.1, 0, waveD) ** 8
 
-    return mix(vec3f(0.2, 0.8, 0.4), vec3f(1), dToWave)
+    const noise = perlin3d.sample(
+      vec3f(
+        p.x, //
+        p.y - kelp.growth * 5,
+        kelp.growth * 0.25,
+      ).mul(12),
+    )
+
+    return Surface({
+      diffuse: hsl2rgb(
+        vec3f(
+          0.33, //
+          0.6 + waveD * 0.5,
+          0.1 + waveD,
+        ),
+      ),
+      specular: hsl2rgb(vec3f(0.5, 0.5, saturate(noise))),
+      emissive: hsl2rgb(
+        vec3f(
+          0.6,
+          0.7,
+          saturate(waveGlow + smoothstep(0.0, 0.7, noise)) ** 4,
+        ).mul(0.8),
+      ),
+      shininess: f32(32),
+    })
   }
 
   function raymarch(worldPos: v3f, kelp: KelpStruct): Hit {
