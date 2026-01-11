@@ -20,9 +20,7 @@ import { cubeVertex, cubeVertices } from '../../lib/geometry'
 import { hsl2rgb } from '../../lib/hsl'
 import {
   LightingPositions,
-  SpecularLighting,
   Surface,
-  calcLighting,
   calcSurfaceLighting,
 } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'

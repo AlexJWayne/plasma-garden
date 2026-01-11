@@ -21,34 +21,24 @@ import {
 } from 'typegpu/data'
 import {
   abs,
-  add,
   atan2,
   clamp,
-  dot,
   fract,
   length,
   max,
   normalize,
-  pow,
-  reflect,
   sin,
   smoothstep,
 } from 'typegpu/std'
 
 import { createInstanceBuffer } from '../../lib/buffers'
-import {
-  easeInCubic,
-  easeInExpo,
-  easeInSine,
-  easeOutSine,
-} from '../../lib/ease'
+import { easeInCubic, easeInSine, easeOutSine } from '../../lib/ease'
 import { cubeVertex, cubeVertices } from '../../lib/geometry'
 import { hsl2rgb } from '../../lib/hsl'
 import {
-  DiffuseLighting,
-  SpecularLighting,
-  calcDiffuseLighting,
-  calcSpecularLighting,
+  LightingPositions,
+  Surface,
+  calcSurfaceLighting,
 } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { remap } from '../../lib/remap'
@@ -283,29 +273,14 @@ function createFragmentProgram(
 
       const normal = calcNormal(hit.pos, entityPos, mushroom)
 
-      const diffuseValue = calcDiffuseLighting(
-        DiffuseLighting({
-          lightPos: cameraBuffer.$.playerPos,
-          surfacePos: hit.pos,
-          normal: normal,
-        }),
-      )
-      const diffuseColor = calcColor(diffuseValue, 0.01, hit.pos, mushroom)
-
-      const specularValue = calcSpecularLighting(
-        SpecularLighting({
-          lightPos: cameraBuffer.$.playerPos,
-          surfacePos: hit.pos,
-          normal: normal,
+      const litColor = calcSurfaceLighting(
+        calcSurfaceColors(hit.pos, mushroom),
+        LightingPositions({
           cameraPos: cameraBuffer.$.pos,
-          shininess: 64,
+          lightPos: cameraBuffer.$.playerPos,
+          surfacePos: hit.pos,
+          normal: normal,
         }),
-      )
-
-      const litColor = clamp(
-        diffuseColor.add(vec3f(1, 0.5, 0).mul(specularValue)),
-        vec3f(0),
-        vec3f(1),
       )
 
       return {
@@ -418,18 +393,12 @@ function createFragmentProgram(
     return normal
   }
 
-  function calcColor(
-    diffuse: number,
-    ambient: number,
-    hitPos: v3f,
-    mushroom: MushroomStruct,
-  ): v3f {
+  function calcSurfaceColors(hitPos: v3f, mushroom: MushroomStruct): Surface {
     'use gpu'
 
     const baseHueShift =
       (fract(mushroom.pos.x * 1.1577 + mushroom.pos.y * 3.7193) * 2 - 1) * 0.1
     const baseColor = hsl2rgb(vec3f(0.66 + baseHueShift, 0.4, 0.4))
-    const diffuseColor = baseColor.mul(ambient + (1 - ambient) * diffuse)
 
     const angle = atan2(hitPos.y - mushroom.pos.y, hitPos.x - mushroom.pos.x)
 
@@ -459,7 +428,12 @@ function createFragmentProgram(
       .add(vec3f(glowWhiteValue))
       .mul(easeInCubic(hitPos.z / mushroom.height))
 
-    return diffuseColor.add(glowColor)
+    return Surface({
+      diffuse: baseColor,
+      specular: vec3f(1, 0.5, 0),
+      emissive: glowColor,
+      shininess: f32(64),
+    })
   }
 
   return main

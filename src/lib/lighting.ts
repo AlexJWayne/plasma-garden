@@ -4,7 +4,7 @@ import { add, clamp, dot, length, max, normalize, saturate } from 'typegpu/std'
 import { remap } from './remap'
 
 const FALLOFF_START = f32(2)
-const FALLOFF_END = f32(10)
+const FALLOFF_END = f32(8)
 
 export const Surface = struct({
   diffuse: vec3f,
