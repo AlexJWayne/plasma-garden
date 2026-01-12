@@ -1,14 +1,5 @@
 import { type Infer, f32, struct, type v3f, vec3f } from 'typegpu/data'
-import {
-  add,
-  clamp,
-  dot,
-  length,
-  max,
-  mul,
-  normalize,
-  saturate,
-} from 'typegpu/std'
+import { clamp, dot, length, max, mul, normalize, saturate } from 'typegpu/std'
 
 import { remap } from './remap'
 
