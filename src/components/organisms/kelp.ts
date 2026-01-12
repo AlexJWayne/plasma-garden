@@ -1,5 +1,5 @@
 import { perlin3d } from '@typegpu/noise'
-import { opExtrudeY, sdLine } from '@typegpu/sdf'
+import { opExtrudeY, opSmoothUnion, sdLine } from '@typegpu/sdf'
 import { addEntity, query, set } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
@@ -21,6 +21,7 @@ import { hsl2rgb } from '../../lib/hsl'
 import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { randomRange } from '../../lib/random'
+import { sdLink } from '../../lib/sdf'
 import { rotate2d } from '../../lib/transform'
 import {
   blending,
@@ -220,8 +221,8 @@ function createFragmentProgram(
       diffuse: hsl2rgb(
         vec3f(
           0.33, //
-          0.6 + waveD * 0.5,
-          0.1 + waveD,
+          0.4 + waveD * 0.5,
+          0.08 + waveD,
         ),
       ),
       specular: hsl2rgb(vec3f(0.5, 0.5, saturate(noise))),
@@ -263,7 +264,7 @@ function createFragmentProgram(
     'use gpu'
     const localP = p.sub(kelp.entityPos)
     const twistAngle =
-      localP.z + //
+      localP.z * 1.5 + //
       kelp.entityPos.x * prime7k +
       kelp.entityPos.y * prime17k +
       kelp.height * prime3k +
@@ -279,17 +280,23 @@ function createFragmentProgram(
     const narrowness = 1 - kelp.growth
     const height = kelp.height * kelp.growth
 
-    const radius = narrowness * 0.4
+    const linkThickness = 0.03
+    const radius = narrowness * 0.4 - linkThickness
 
-    const flatRibbonD =
+    const membrane2d =
       sdLine(
         twistedP.xz,
         vec2f(0, -radius), //
-        vec2f(0, height - radius),
+        vec2f(0, height - radius - linkThickness),
       ) - radius
+    const membrane = opExtrudeY(twistedP, membrane2d, 0.01)
 
-    const center = opExtrudeY(twistedP, flatRibbonD, 0.01)
-    return center
+    const membraneCenter = height * 0.5 - radius - linkThickness
+    const centeredP = twistedP.sub(vec3f(0, 0, membraneCenter))
+    const offsetP = vec3f(centeredP.xzy)
+    const border = sdLink(offsetP, height * 0.5, radius, linkThickness)
+
+    return opSmoothUnion(membrane, border, 0.07)
   }
 
   function calcNormal(p: v3f, kelp: KelpStruct): v3f {
