@@ -15,7 +15,7 @@ import { clamp, length, mix, normalize, round } from 'typegpu/std'
 
 import { dither } from '../../lib/dither'
 import { quadVertices } from '../../lib/geometry'
-import { SpecularLighting, calcLighting } from '../../lib/lighting'
+import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import {
   createColorAttachment,
@@ -98,17 +98,19 @@ function createFragmentProgram(
   })(({ worldPos, clipPos }) => {
     const hit = raymarch(worldPos)
     if (hit.hit) {
-      const normal = calcNormal(hit.pos)
-      const color = calcLighting(
-        SpecularLighting({
+      const color = calcSurfaceLighting(
+        Lighting({
+          cameraPos: cameraBuffer.$.pos,
           lightPos: cameraBuffer.$.playerPos,
           surfacePos: hit.pos,
-          normal,
-          cameraPos: cameraBuffer.$.pos,
-          shininess: f32(32),
+          normal: calcNormal(hit.pos),
+          surface: Surface({
+            diffuse: getColor(hit.pos).mul(0.8),
+            specular: vec3f(0.1),
+            emissive: vec3f(0),
+            shininess: f32(32),
+          }),
         }),
-        getColor(hit.pos).mul(0.8),
-        vec3f(0.1),
       )
       return vec4f(dither(color, clipPos.xy), 1)
     }

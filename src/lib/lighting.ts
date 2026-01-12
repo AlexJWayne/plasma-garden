@@ -14,13 +14,14 @@ export const Surface = struct({
 })
 export type Surface = Infer<typeof Surface>
 
-export const LightingPositions = struct({
+export const Lighting = struct({
   cameraPos: vec3f,
   lightPos: vec3f,
   surfacePos: vec3f,
   normal: vec3f,
+  surface: Surface,
 })
-export type LightingPositions = Infer<typeof LightingPositions>
+export type Lighting = Infer<typeof Lighting>
 
 export const DiffuseLighting = struct({
   lightPos: vec3f,
@@ -119,17 +120,20 @@ export function calcLighting(
   )
 }
 
-export function calcSurfaceLighting(
-  surface: Surface,
-  lighting: LightingPositions,
-): v3f {
+export function calcSurfaceLighting({
+  cameraPos,
+  lightPos,
+  surfacePos,
+  normal,
+  surface,
+}: Lighting): v3f {
   'use gpu'
   const color = calcLighting(
     SpecularLighting({
-      cameraPos: lighting.cameraPos,
-      lightPos: lighting.lightPos,
-      surfacePos: lighting.surfacePos,
-      normal: lighting.normal,
+      cameraPos: cameraPos,
+      lightPos: lightPos,
+      surfacePos: surfacePos,
+      normal: normal,
       shininess: surface.shininess,
     }),
     surface.diffuse,

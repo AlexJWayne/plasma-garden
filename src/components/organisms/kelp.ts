@@ -18,11 +18,7 @@ import { abs, length, normalize, saturate, sin, smoothstep } from 'typegpu/std'
 import { createInstanceBuffer } from '../../lib/buffers'
 import { cubeVertex, cubeVertices } from '../../lib/geometry'
 import { hsl2rgb } from '../../lib/hsl'
-import {
-  LightingPositions,
-  Surface,
-  calcSurfaceLighting,
-} from '../../lib/lighting'
+import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { randomRange } from '../../lib/random'
 import { rotate2d } from '../../lib/transform'
@@ -188,12 +184,12 @@ function createFragmentProgram(
     const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
 
     const color = calcSurfaceLighting(
-      calcSurfaceColors(hit.twistedP, kelp),
-      LightingPositions({
+      Lighting({
         cameraPos: cameraBuffer.$.pos,
         lightPos: cameraBuffer.$.playerPos,
         surfacePos: hit.pos,
         normal: calcNormal(hit.pos, kelp),
+        surface: calcSurfaceColors(hit.twistedP, kelp),
       }),
     )
 

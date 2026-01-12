@@ -35,11 +35,7 @@ import { createInstanceBuffer } from '../../lib/buffers'
 import { easeInCubic, easeInSine, easeOutSine } from '../../lib/ease'
 import { cubeVertex, cubeVertices } from '../../lib/geometry'
 import { hsl2rgb } from '../../lib/hsl'
-import {
-  LightingPositions,
-  Surface,
-  calcSurfaceLighting,
-} from '../../lib/lighting'
+import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { remap } from '../../lib/remap'
 import { sdCone } from '../../lib/sdf'
@@ -274,12 +270,12 @@ function createFragmentProgram(
       const normal = calcNormal(hit.pos, entityPos, mushroom)
 
       const litColor = calcSurfaceLighting(
-        calcSurfaceColors(hit.pos, mushroom),
-        LightingPositions({
+        Lighting({
           cameraPos: cameraBuffer.$.pos,
           lightPos: cameraBuffer.$.playerPos,
           surfacePos: hit.pos,
           normal: normal,
+          surface: calcSurfaceColors(hit.pos, mushroom),
         }),
       )
 
