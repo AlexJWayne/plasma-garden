@@ -38,7 +38,7 @@ import { hsl2rgb } from '../../lib/hsl'
 import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { remap } from '../../lib/remap'
-import { sdCone } from '../../lib/sdf'
+import { createCalcNormal, sdCone } from '../../lib/sdf'
 import { rotate2d, rotateX } from '../../lib/transform'
 import {
   blending,
@@ -259,7 +259,7 @@ function createFragmentProgram(
         completion,
       })
 
-      const hit = raymarch(worldPos, entityPos, mushroom)
+      const hit = raymarch(worldPos, mushroom)
 
       if (DEBUG && !hit.hit)
         return { color: vec4f(1, 0, 1, 1).mul(0.25), depth: 0 }
@@ -286,11 +286,7 @@ function createFragmentProgram(
     },
   )
 
-  function raymarch(
-    worldPos: v3f,
-    entityPos: v3f,
-    mushroom: MushroomStruct,
-  ): Hit {
+  function raymarch(worldPos: v3f, mushroom: MushroomStruct): Hit {
     'use gpu'
 
     const triDiff = worldPos.sub(cameraBuffer.$.pos)
@@ -299,7 +295,7 @@ function createFragmentProgram(
 
     for (let i = 0; i < MAX_STEPS; i++) {
       const point = cameraBuffer.$.pos.add(rayDirection.mul(totalDistance))
-      const distance = scene(point, entityPos, mushroom)
+      const distance = scene(point, mushroom)
 
       if (distance < EPSILON) return Hit({ hit: true, pos: point })
       if (distance > MAX_DISTANCE) break
@@ -310,9 +306,9 @@ function createFragmentProgram(
     return Hit({ hit: false, pos: vec3f() })
   }
 
-  function scene(p: v3f, entityPos: v3f, mushroom: MushroomStruct): number {
+  function scene(p: v3f, mushroom: MushroomStruct): number {
     'use gpu'
-    const localP = p.sub(entityPos)
+    const localP = p.sub(mushroom.pos)
 
     const growth = easeInSine(mushroom.completion)
     const stemRadius = mushroom.stemRadius * growth
@@ -361,25 +357,11 @@ function createFragmentProgram(
     return opSmoothDifference(opUnion(stem, cap), expiry, 0.1)
   }
 
+  const calcNormalBase = createCalcNormal(scene, EPSILON)
+
   function calcNormal(p: v3f, entityPos: v3f, mushroom: MushroomStruct): v3f {
     'use gpu'
-    const h = EPSILON
-    const k = vec2f(1, -1)
-    let normal = normalize(
-      k.xyy
-        .mul(scene(p.add(k.xyy.mul(h)), entityPos, mushroom))
-        .add(
-          k.yyx
-            .mul(scene(p.add(k.yyx.mul(h)), entityPos, mushroom))
-            .add(
-              k.yxy
-                .mul(scene(p.add(k.yxy.mul(h)), entityPos, mushroom))
-                .add(
-                  k.xxx.mul(scene(p.add(k.xxx.mul(h)), entityPos, mushroom)),
-                ),
-            ),
-        ),
-    )
+    let normal = calcNormalBase(p, mushroom)
 
     const angle = atan2(p.y - entityPos.y, p.x - entityPos.x)
     normal = vec3f(

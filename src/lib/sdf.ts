@@ -9,6 +9,7 @@ import {
   max,
   min,
   mul,
+  normalize,
   sign,
   sin,
   sqrt,
@@ -54,4 +55,27 @@ export function opIntersection(a: number, b: number): number {
 export function opUnion(a: number, b: number): number {
   'use gpu'
   return min(a, b)
+}
+
+export function createCalcNormal<T>(
+  sdfFn: (p: v3f, arg: T) => number,
+  epsilon: number,
+): (p: v3f, arg: T) => v3f {
+  return function calcNormal(p: v3f, arg: T): v3f {
+    'use gpu'
+    const k = vec2f(1, -1)
+    return normalize(
+      k.xyy
+        .mul(sdfFn(p.add(k.xyy.mul(epsilon)), arg))
+        .add(
+          k.yyx
+            .mul(sdfFn(p.add(k.yyx.mul(epsilon)), arg))
+            .add(
+              k.yxy
+                .mul(sdfFn(p.add(k.yxy.mul(epsilon)), arg))
+                .add(k.xxx.mul(sdfFn(p.add(k.xxx.mul(epsilon)), arg))),
+            ),
+        ),
+    )
+  }
 }

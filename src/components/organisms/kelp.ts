@@ -21,7 +21,7 @@ import { hsl2rgb } from '../../lib/hsl'
 import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { randomRange } from '../../lib/random'
-import { sdLink } from '../../lib/sdf'
+import { createCalcNormal, sdLink } from '../../lib/sdf'
 import { rotate2d } from '../../lib/transform'
 import {
   blending,
@@ -299,24 +299,7 @@ function createFragmentProgram(
     return opSmoothUnion(membrane, border, 0.07)
   }
 
-  function calcNormal(p: v3f, kelp: KelpStruct): v3f {
-    'use gpu'
-    const h = EPSILON
-    const k = vec2f(1, -1)
-    return normalize(
-      k.xyy
-        .mul(scene(p.add(k.xyy.mul(h)), kelp))
-        .add(
-          k.yyx
-            .mul(scene(p.add(k.yyx.mul(h)), kelp))
-            .add(
-              k.yxy
-                .mul(scene(p.add(k.yxy.mul(h)), kelp))
-                .add(k.xxx.mul(scene(p.add(k.xxx.mul(h)), kelp))),
-            ),
-        ),
-    )
-  }
+  const calcNormal = createCalcNormal(scene, EPSILON)
 
   return main
 }
