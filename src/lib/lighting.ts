@@ -1,5 +1,14 @@
 import { type Infer, f32, struct, type v3f, vec3f } from 'typegpu/data'
-import { add, clamp, dot, length, max, normalize, saturate } from 'typegpu/std'
+import {
+  add,
+  clamp,
+  dot,
+  length,
+  max,
+  mul,
+  normalize,
+  saturate,
+} from 'typegpu/std'
 
 import { remap } from './remap'
 
@@ -37,7 +46,7 @@ export const SpecularLighting = struct({
   shininess: f32,
 })
 
-export function calcDiffuseLighting({
+function calcDiffuseLighting({
   lightPos,
   surfacePos,
   normal,
@@ -61,7 +70,7 @@ export function calcDiffuseLighting({
   return diffuse
 }
 
-export function calcSpecularLighting({
+function calcSpecularLighting({
   lightPos,
   surfacePos,
   normal,
@@ -94,32 +103,6 @@ export function calcSpecularLighting({
   return specular
 }
 
-export function calcLighting(
-  config: Infer<typeof SpecularLighting>,
-  diffuseColor: v3f,
-  specularColor: v3f,
-): v3f {
-  'use gpu'
-
-  const diffuse = calcDiffuseLighting(
-    DiffuseLighting({
-      lightPos: config.lightPos,
-      surfacePos: config.surfacePos,
-      normal: config.normal,
-    }),
-  )
-  const specular = calcSpecularLighting(config)
-
-  return clamp(
-    add(
-      diffuseColor.mul(diffuse), //
-      specularColor.mul(specular),
-    ),
-    vec3f(0),
-    vec3f(1),
-  )
-}
-
 export function calcSurfaceLighting({
   cameraPos,
   lightPos,
@@ -128,7 +111,15 @@ export function calcSurfaceLighting({
   surface,
 }: Lighting): v3f {
   'use gpu'
-  const color = calcLighting(
+
+  const diffuse = calcDiffuseLighting(
+    DiffuseLighting({
+      lightPos: lightPos,
+      surfacePos: surfacePos,
+      normal: normal,
+    }),
+  )
+  const specular = calcSpecularLighting(
     SpecularLighting({
       cameraPos: cameraPos,
       lightPos: lightPos,
@@ -136,9 +127,11 @@ export function calcSurfaceLighting({
       normal: normal,
       shininess: surface.shininess,
     }),
-    surface.diffuse,
-    surface.specular,
   )
 
-  return saturate(color.add(surface.emissive))
+  return saturate(
+    mul(surface.diffuse, diffuse)
+      .add(mul(surface.specular, specular))
+      .add(surface.emissive),
+  )
 }
