@@ -1,7 +1,7 @@
 import type { TgpuRoot } from 'typegpu'
 import { f32, struct } from 'typegpu/data'
 
-import type { World } from '../main'
+import type { World } from './main'
 
 export const TimeStruct = struct({
   elapsed: f32,
