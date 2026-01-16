@@ -35,6 +35,8 @@ import { type CameraStruct, worldToClipSpace } from '../game/camera'
 import { GridPosition, getRandomEmptyGridPosition } from '../general/grid'
 import { Lifetime, getLifetimeCompletion } from '../general/lifetime'
 
+const DEBUG = true
+
 type Kelp = {
   height: number
 }
@@ -73,12 +75,13 @@ export function createRenderKelpSystem(world: World) {
     1000,
   )
 
+  const { vertexProgram, fragmentProgram } = createShaderProgram(
+    world.camera.buffer.as('uniform'),
+  )
+
   const pipeline = world.root['~unstable']
-    .withVertex(
-      createVertexProgram(world.camera.buffer.as('uniform')),
-      kelpsLayout.attrib,
-    )
-    .withFragment(createFragmentProgram(world.camera.buffer.as('uniform')), {
+    .withVertex(vertexProgram, kelpsLayout.attrib)
+    .withFragment(fragmentProgram, {
       color: { format: presentationFormat, blend: blending.normal },
     })
     .withDepthStencil(depthStencil)
@@ -112,10 +115,10 @@ export function createRenderKelpSystem(world: World) {
   return render
 }
 
-function createVertexProgram(
+function createShaderProgram(
   cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
 ) {
-  return tgpu['~unstable'].vertexFn({
+  const vertexProgram = tgpu['~unstable'].vertexFn({
     in: {
       idx: builtin.vertexIndex,
       entityPos: vec3f,
@@ -145,11 +148,7 @@ function createVertexProgram(
       growth,
     }
   })
-}
 
-function createFragmentProgram(
-  cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
-) {
   // Handy primes for randomy feeling things.
   const prime3k = Math.sqrt(3) * 1000
   const prime7k = Math.sqrt(7) * 1000
@@ -206,6 +205,10 @@ function createFragmentProgram(
     const kelp = KelpStruct({ entityPos, height, growth })
 
     const hit = raymarch(cameraBuffer.$.pos, worldPos, kelp)
+
+    if (DEBUG && !hit.isHit)
+      return { color: vec4f(1, 0, 1, 1).mul(0.25), depth: 0 }
+
     if (!hit.isHit) return { color: vec4f(0), depth: 1 }
 
     const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
@@ -276,5 +279,7 @@ function createFragmentProgram(
     return vec3f(rotate2d(localP.xy, twistAngle), localP.z)
   }
 
-  return main
+  const fragmentProgram = main
+
+  return { vertexProgram, fragmentProgram }
 }
