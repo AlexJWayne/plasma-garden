@@ -1,4 +1,4 @@
-import { perlin3d } from '@typegpu/noise'
+import { perlin3d, randf } from '@typegpu/noise'
 import { opExtrudeY, opSmoothUnion, sdLine } from '@typegpu/sdf'
 import { addEntity, query, set } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
@@ -35,10 +35,11 @@ import { type CameraStruct, worldToClipSpace } from '../game/camera'
 import { GridPosition, getRandomEmptyGridPosition } from '../general/grid'
 import { Lifetime, getLifetimeCompletion } from '../general/lifetime'
 
-const DEBUG = true
+const DEBUG = false
 
 type Kelp = {
   height: number
+  seed: number
 }
 const Kelp = [] as Kelp[]
 
@@ -46,6 +47,7 @@ const KelpStruct = struct({
   entityPos: vec3f,
   height: f32,
   growth: f32,
+  seed: f32,
 })
 type KelpStruct = Infer<typeof KelpStruct>
 
@@ -61,7 +63,10 @@ export function createKelp(world: World): void {
     set(Lifetime, randomRange(10, 30)),
     Kelp,
   )
-  Kelp[eid] = { height: randomRange(3, 6) }
+  Kelp[eid] = {
+    height: randomRange(3, 6),
+    seed: Math.random(),
+  }
 }
 
 export function spawnKelpSystem(world: World): void {
@@ -99,9 +104,10 @@ export function createRenderKelpSystem(world: World) {
       [...kelps].map((eid, idx) => ({
         idx,
         value: {
-          height: Kelp[eid].height,
           entityPos: vec3f(GridPosition[eid], 0),
+          height: Kelp[eid].height,
           growth: getLifetimeCompletion(world, eid),
+          seed: Kelp[eid].seed,
         },
       })),
     )
@@ -124,6 +130,7 @@ function createShaderProgram(
       entityPos: vec3f,
       height: f32,
       growth: f32,
+      seed: f32,
     },
     out: {
       localPos: vec3f,
@@ -133,8 +140,9 @@ function createShaderProgram(
       entityPos: vec3f,
       height: f32,
       growth: f32,
+      seed: f32,
     },
-  })(({ idx, entityPos, height, growth }) => {
+  })(({ idx, entityPos, height, growth, seed }) => {
     const localPos = cubeVertex(idx, 0.9 * (1 - growth), height * growth)
     const worldPos = localPos.add(vec3f(entityPos))
     const clipPos = worldToClipSpace(cameraBuffer.$, worldPos)
@@ -146,13 +154,9 @@ function createShaderProgram(
       entityPos,
       height,
       growth,
+      seed,
     }
   })
-
-  // Handy primes for randomy feeling things.
-  const prime3k = Math.sqrt(3) * 1000
-  const prime7k = Math.sqrt(7) * 1000
-  const prime17k = Math.sqrt(17) * 1000
 
   function sdSurface(p: v3f, kelp: KelpStruct): number {
     'use gpu'
@@ -187,7 +191,7 @@ function createShaderProgram(
   })
   const calcNormal = createCalcNormal(sdSurface, 0.01)
 
-  const main = tgpu['~unstable'].fragmentFn({
+  const fragmentProgram = tgpu['~unstable'].fragmentFn({
     in: {
       localPos: vec3f,
       worldPos: vec3f,
@@ -196,13 +200,15 @@ function createShaderProgram(
       entityPos: vec3f,
       height: f32,
       growth: f32,
+      seed: f32,
     },
     out: {
       color: vec4f,
       depth: builtin.fragDepth,
     },
-  })(({ worldPos, entityPos, height, growth }) => {
-    const kelp = KelpStruct({ entityPos, height, growth })
+  })(({ worldPos, entityPos, height, growth, seed }) => {
+    randf.seed(seed)
+    const kelp = KelpStruct({ entityPos, height, growth, seed })
 
     const hit = raymarch(cameraBuffer.$.pos, worldPos, kelp)
 
@@ -268,18 +274,12 @@ function createShaderProgram(
 
   function calcTwistedP(p: v3f, kelp: KelpStruct): v3f {
     'use gpu'
+
     const localP = p.sub(kelp.entityPos)
-    const twistAngle =
-      localP.z * 1.5 + //
-      kelp.entityPos.x * prime7k +
-      kelp.entityPos.y * prime17k +
-      kelp.height * prime3k +
-      kelp.entityPos.x * kelp.entityPos.y * 0.123 // breaks symmetry
+    const twistAngle = localP.z * 1.5 + (Math.PI / 2) * kelp.seed
 
     return vec3f(rotate2d(localP.xy, twistAngle), localP.z)
   }
-
-  const fragmentProgram = main
 
   return { vertexProgram, fragmentProgram }
 }
