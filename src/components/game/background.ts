@@ -1,17 +1,7 @@
 import { opSmoothDifference, sdBox2d, sdBox3d, sdSphere } from '@typegpu/sdf'
 import { type TgpuBufferUniform, tgpu } from 'typegpu'
-import {
-  type Infer,
-  bool,
-  builtin,
-  f32,
-  struct,
-  type v3f,
-  vec2f,
-  vec3f,
-  vec4f,
-} from 'typegpu/data'
-import { clamp, length, mix, normalize, round } from 'typegpu/std'
+import { builtin, f32, type v3f, vec2f, vec3f, vec4f } from 'typegpu/data'
+import { clamp, mix, round } from 'typegpu/std'
 
 import { dither } from '../../lib/dither'
 import { quadVertices } from '../../lib/geometry'
