@@ -39,6 +39,7 @@ const DEBUG = false
 
 type Kelp = {
   height: number
+  twist: number
   seed: number
 }
 const Kelp = [] as Kelp[]
@@ -46,6 +47,7 @@ const Kelp = [] as Kelp[]
 const KelpStruct = struct({
   entityPos: vec3f,
   height: f32,
+  twist: f32,
   growth: f32,
   seed: f32,
 })
@@ -65,8 +67,10 @@ export function createKelp(world: World): void {
   )
   Kelp[eid] = {
     height: randomRange(3, 6),
+    twist: randomRange(0.75, 2) * (Math.random() > 0.5 ? 1 : -1),
     seed: Math.random(),
   }
+  console.log(Kelp[eid].twist)
 }
 
 export function spawnKelpSystem(world: World): void {
@@ -107,6 +111,7 @@ export function createRenderKelpSystem(world: World) {
           entityPos: vec3f(GridPosition[eid], 0),
           height: Kelp[eid].height,
           growth: getLifetimeCompletion(world, eid),
+          twist: Kelp[eid].twist,
           seed: Kelp[eid].seed,
         },
       })),
@@ -130,6 +135,7 @@ function createShaderProgram(
       entityPos: vec3f,
       height: f32,
       growth: f32,
+      twist: f32,
       seed: f32,
     },
     out: {
@@ -141,8 +147,9 @@ function createShaderProgram(
       height: f32,
       growth: f32,
       seed: f32,
+      twist: f32,
     },
-  })(({ idx, entityPos, height, growth, seed }) => {
+  })(({ idx, entityPos, height, growth, twist, seed }) => {
     const localPos = cubeVertex(idx, 0.9 * (1 - growth), height * growth)
     const worldPos = localPos.add(vec3f(entityPos))
     const clipPos = worldToClipSpace(cameraBuffer.$, worldPos)
@@ -155,6 +162,7 @@ function createShaderProgram(
       height,
       growth,
       seed,
+      twist,
     }
   })
 
@@ -200,15 +208,16 @@ function createShaderProgram(
       entityPos: vec3f,
       height: f32,
       growth: f32,
+      twist: f32,
       seed: f32,
     },
     out: {
       color: vec4f,
       depth: builtin.fragDepth,
     },
-  })(({ worldPos, entityPos, height, growth, seed }) => {
+  })(({ worldPos, entityPos, height, growth, twist, seed }) => {
     randf.seed(seed)
-    const kelp = KelpStruct({ entityPos, height, growth, seed })
+    const kelp = KelpStruct({ entityPos, height, growth, twist, seed })
 
     const hit = raymarch(cameraBuffer.$.pos, worldPos, kelp)
 
@@ -276,7 +285,7 @@ function createShaderProgram(
     'use gpu'
 
     const localP = p.sub(kelp.entityPos)
-    const twistAngle = localP.z * 1.5 + (Math.PI / 2) * kelp.seed
+    const twistAngle = localP.z * kelp.twist + (Math.PI / 2) * kelp.seed
 
     return vec3f(rotate2d(localP.xy, twistAngle), localP.z)
   }
