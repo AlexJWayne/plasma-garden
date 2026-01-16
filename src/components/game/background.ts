@@ -17,6 +17,7 @@ import { dither } from '../../lib/dither'
 import { quadVertices } from '../../lib/geometry'
 import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
+import { createCalcNormal, createRaymarch } from '../../lib/raymarching'
 import {
   createColorAttachment,
   createDepthAttachment,
@@ -84,10 +85,25 @@ function createFragmentProgram(
   const MAX_STEPS = 50
   const EPSILON = 0.01
 
-  const Hit = struct({ hit: bool, pos: vec3f, totalDistance: f32 })
-  type Hit = Infer<typeof Hit>
-
   const COLOR = vec3f(0.2, 0.3, 0.1)
+
+  function scene(p: v3f, _dummyArg: number): number {
+    'use gpu'
+
+    const repeatedP = vec3f(p.xy.sub(round(p.xy.div(1))), p.z)
+
+    return opSmoothDifference(
+      sdSphere(repeatedP.sub(vec3f(0, 0, -0.5)), 0.8),
+      sdBox3d(repeatedP.sub(vec3f(0, 0, 0.5)), vec3f(10, 10, 0.5)),
+      0.1,
+    )
+  }
+  const calcNormal = createCalcNormal(scene, EPSILON)
+  const raymarch = createRaymarch(scene, {
+    maxSteps: MAX_STEPS,
+    maxDistance: MAX_DISTANCE,
+    epsilon: EPSILON,
+  })
 
   const main = tgpu['~unstable'].fragmentFn({
     in: {
@@ -96,14 +112,14 @@ function createFragmentProgram(
     },
     out: vec4f,
   })(({ worldPos, clipPos }) => {
-    const hit = raymarch(worldPos)
-    if (hit.hit) {
+    const hit = raymarch(cameraBuffer.$.pos, worldPos, 0)
+    if (hit.isHit) {
       const color = calcSurfaceLighting(
         Lighting({
           cameraPos: cameraBuffer.$.pos,
           lightPos: cameraBuffer.$.playerPos,
           surfacePos: hit.pos,
-          normal: calcNormal(hit.pos),
+          normal: calcNormal(hit.pos, 0),
           surface: Surface({
             diffuse: getColor(hit.pos).mul(0.8),
             specular: vec3f(0.1),
@@ -117,63 +133,11 @@ function createFragmentProgram(
     return vec4f(vec3f(0.2), 1)
   })
 
-  function scene(p: v3f): number {
-    'use gpu'
-
-    const repeatedP = vec3f(p.xy.sub(round(p.xy.div(1))), p.z)
-
-    return opSmoothDifference(
-      sdSphere(repeatedP.sub(vec3f(0, 0, -0.5)), 0.8),
-      sdBox3d(repeatedP.sub(vec3f(0, 0, 0.5)), vec3f(10, 10, 0.5)),
-      0.1,
-    )
-  }
-
   function getColor(hitPos: v3f): v3f {
     'use gpu'
     const repeatedP = vec2f(hitPos.xy.sub(round(hitPos.xy.div(1))))
     const d = clamp(sdBox2d(repeatedP, vec2f(0.35)) * 6, 0, 1)
     return mix(COLOR.mul(0.5), COLOR, d)
-  }
-
-  function raymarch(worldPos: v3f): Hit {
-    'use gpu'
-
-    const triDiff = worldPos.sub(cameraBuffer.$.pos)
-    let totalDistance = length(triDiff)
-    const rayDirection = normalize(triDiff)
-
-    for (let i = 0; i < MAX_STEPS; i++) {
-      const point = cameraBuffer.$.pos.add(rayDirection.mul(totalDistance))
-      const distance = scene(point)
-
-      if (distance < EPSILON)
-        return Hit({ hit: true, pos: point, totalDistance })
-      if (distance > MAX_DISTANCE) break
-
-      totalDistance += distance
-    }
-
-    return Hit({ hit: false, pos: vec3f(), totalDistance })
-  }
-
-  function calcNormal(p: v3f): v3f {
-    'use gpu'
-    const h = EPSILON
-    const k = vec2f(1, -1)
-    return normalize(
-      k.xyy
-        .mul(scene(p.add(k.xyy.mul(h))))
-        .add(
-          k.yyx
-            .mul(scene(p.add(k.yyx.mul(h))))
-            .add(
-              k.yxy
-                .mul(scene(p.add(k.yxy.mul(h))))
-                .add(k.xxx.mul(scene(p.add(k.xxx.mul(h))))),
-            ),
-        ),
-    )
   }
 
   return main

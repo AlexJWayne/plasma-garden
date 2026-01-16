@@ -21,7 +21,8 @@ import { hsl2rgb } from '../../lib/hsl'
 import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { randomRange } from '../../lib/random'
-import { createCalcNormal, sdLink } from '../../lib/sdf'
+import { createCalcNormal } from '../../lib/raymarching'
+import { sdLink } from '../../lib/sdf'
 import { rotate2d } from '../../lib/transform'
 import {
   blending,

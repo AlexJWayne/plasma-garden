@@ -10,7 +10,6 @@ import { addEntity, query, set } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
   type Infer,
-  bool,
   builtin,
   f32,
   struct,
@@ -19,17 +18,7 @@ import {
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import {
-  abs,
-  atan2,
-  clamp,
-  fract,
-  length,
-  max,
-  normalize,
-  sin,
-  smoothstep,
-} from 'typegpu/std'
+import { abs, atan2, clamp, fract, max, sin, smoothstep } from 'typegpu/std'
 
 import { createInstanceBuffer } from '../../lib/buffers'
 import { easeInCubic, easeInSine, easeOutSine } from '../../lib/ease'
@@ -37,8 +26,9 @@ import { cubeVertex, cubeVertices } from '../../lib/geometry'
 import { hsl2rgb } from '../../lib/hsl'
 import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
+import { createCalcNormal, createRaymarch } from '../../lib/raymarching'
 import { remap } from '../../lib/remap'
-import { createCalcNormal, sdCone } from '../../lib/sdf'
+import { sdCone } from '../../lib/sdf'
 import { rotate2d, rotateX } from '../../lib/transform'
 import {
   blending,
@@ -219,9 +209,6 @@ function createFragmentProgram(
   const MAX_STEPS = 50
   const EPSILON = 0.001
 
-  const Hit = struct({ hit: bool, pos: vec3f })
-  type Hit = Infer<typeof Hit>
-
   const main = tgpu['~unstable'].fragmentFn({
     in: {
       worldPos: vec3f,
@@ -259,11 +246,11 @@ function createFragmentProgram(
         completion,
       })
 
-      const hit = raymarch(worldPos, mushroom)
+      const hit = raymarch(cameraBuffer.$.pos, worldPos, mushroom)
 
-      if (DEBUG && !hit.hit)
+      if (DEBUG && !hit.isHit)
         return { color: vec4f(1, 0, 1, 1).mul(0.25), depth: 0 }
-      if (!hit.hit) return { color: vec4f(0), depth: 1 }
+      if (!hit.isHit) return { color: vec4f(0), depth: 1 }
 
       const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
 
@@ -285,26 +272,6 @@ function createFragmentProgram(
       }
     },
   )
-
-  function raymarch(worldPos: v3f, mushroom: MushroomStruct): Hit {
-    'use gpu'
-
-    const triDiff = worldPos.sub(cameraBuffer.$.pos)
-    let totalDistance = length(triDiff)
-    const rayDirection = normalize(triDiff)
-
-    for (let i = 0; i < MAX_STEPS; i++) {
-      const point = cameraBuffer.$.pos.add(rayDirection.mul(totalDistance))
-      const distance = scene(point, mushroom)
-
-      if (distance < EPSILON) return Hit({ hit: true, pos: point })
-      if (distance > MAX_DISTANCE) break
-
-      totalDistance += distance
-    }
-
-    return Hit({ hit: false, pos: vec3f() })
-  }
 
   function scene(p: v3f, mushroom: MushroomStruct): number {
     'use gpu'
@@ -356,6 +323,12 @@ function createFragmentProgram(
     // return opUnion(stem, cap)
     return opSmoothDifference(opUnion(stem, cap), expiry, 0.1)
   }
+
+  const raymarch = createRaymarch(scene, {
+    maxSteps: MAX_STEPS,
+    maxDistance: MAX_DISTANCE,
+    epsilon: EPSILON,
+  })
 
   const calcNormalBase = createCalcNormal(scene, EPSILON)
 
