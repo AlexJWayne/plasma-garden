@@ -21,7 +21,7 @@ import { hsl2rgb } from '../../lib/hsl'
 import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { randomRange } from '../../lib/random'
-import { createCalcNormal } from '../../lib/raymarching'
+import { createCalcNormal, createRaymarch } from '../../lib/raymarching'
 import { sdLink } from '../../lib/sdf'
 import { rotate2d } from '../../lib/transform'
 import {
@@ -151,17 +151,43 @@ function createVertexProgram(
 function createFragmentProgram(
   cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
 ) {
-  const MAX_DISTANCE = f32(100)
-  const MAX_STEPS = 100
-  const EPSILON = 0.003
-
-  const Hit = struct({ hit: bool, pos: vec3f, twistedP: vec3f })
-  type Hit = Infer<typeof Hit>
-
   // Handy primes for randomy feeling things.
   const prime3k = Math.sqrt(3) * 1000
   const prime7k = Math.sqrt(7) * 1000
   const prime17k = Math.sqrt(17) * 1000
+
+  function sdSurface(p: v3f, kelp: KelpStruct): number {
+    'use gpu'
+
+    const twistedP = calcTwistedP(p, kelp)
+    const narrowness = 1 - kelp.growth
+    const height = kelp.height * kelp.growth
+
+    const linkThickness = 0.03
+    const radius = narrowness * 0.4 - linkThickness
+
+    const membrane2d =
+      sdLine(
+        twistedP.xz,
+        vec2f(0, -radius),
+        vec2f(0, height - radius - linkThickness),
+      ) - radius
+    const membrane = opExtrudeY(twistedP, membrane2d, 0.01)
+
+    const membraneCenter = height * 0.5 - radius - linkThickness
+    const centeredP = twistedP.sub(vec3f(0, 0, membraneCenter))
+    const offsetP = vec3f(centeredP.xzy)
+    const border = sdLink(offsetP, height * 0.5, radius, linkThickness)
+
+    return opSmoothUnion(membrane, border, 0.07)
+  }
+
+  const raymarch = createRaymarch(sdSurface, {
+    maxSteps: 100,
+    maxDistance: 100,
+    epsilon: 0.003,
+  })
+  const calcNormal = createCalcNormal(sdSurface, 0.01)
 
   const main = tgpu['~unstable'].fragmentFn({
     in: {
@@ -180,8 +206,8 @@ function createFragmentProgram(
   })(({ worldPos, entityPos, height, growth }) => {
     const kelp = KelpStruct({ entityPos, height, growth })
 
-    const hit = raymarch(worldPos, kelp)
-    if (!hit.hit) return { color: vec4f(0), depth: 1 }
+    const hit = raymarch(cameraBuffer.$.pos, worldPos, kelp)
+    if (!hit.isHit) return { color: vec4f(0), depth: 1 }
 
     const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(hit.pos, 1))
 
@@ -191,7 +217,7 @@ function createFragmentProgram(
         lightPos: cameraBuffer.$.playerPos,
         surfacePos: hit.pos,
         normal: calcNormal(hit.pos, kelp),
-        surface: calcSurfaceColors(hit.twistedP, kelp),
+        surface: calcSurfaceColors(calcTwistedP(hit.pos, kelp), kelp),
       }),
     )
 
@@ -238,29 +264,6 @@ function createFragmentProgram(
     })
   }
 
-  function raymarch(worldPos: v3f, kelp: KelpStruct): Hit {
-    'use gpu'
-
-    const triDiff = worldPos.sub(cameraBuffer.$.pos)
-    let totalDistance = length(triDiff)
-    const rayDirection = normalize(triDiff)
-
-    for (let i = 0; i < MAX_STEPS; i++) {
-      const point = cameraBuffer.$.pos.add(rayDirection.mul(totalDistance))
-      const distance = scene(point, kelp)
-
-      if (distance < EPSILON) {
-        const twistedP = calcTwistedP(point, kelp)
-        return Hit({ hit: true, pos: point, twistedP })
-      }
-      if (distance > MAX_DISTANCE) break
-
-      totalDistance += distance
-    }
-
-    return Hit({ hit: false, pos: vec3f(), twistedP: vec3f() })
-  }
-
   function calcTwistedP(p: v3f, kelp: KelpStruct): v3f {
     'use gpu'
     const localP = p.sub(kelp.entityPos)
@@ -273,34 +276,6 @@ function createFragmentProgram(
 
     return vec3f(rotate2d(localP.xy, twistAngle), localP.z)
   }
-
-  function scene(p: v3f, kelp: KelpStruct): number {
-    'use gpu'
-
-    const twistedP = calcTwistedP(p, kelp)
-    const narrowness = 1 - kelp.growth
-    const height = kelp.height * kelp.growth
-
-    const linkThickness = 0.03
-    const radius = narrowness * 0.4 - linkThickness
-
-    const membrane2d =
-      sdLine(
-        twistedP.xz,
-        vec2f(0, -radius), //
-        vec2f(0, height - radius - linkThickness),
-      ) - radius
-    const membrane = opExtrudeY(twistedP, membrane2d, 0.01)
-
-    const membraneCenter = height * 0.5 - radius - linkThickness
-    const centeredP = twistedP.sub(vec3f(0, 0, membraneCenter))
-    const offsetP = vec3f(centeredP.xzy)
-    const border = sdLink(offsetP, height * 0.5, radius, linkThickness)
-
-    return opSmoothUnion(membrane, border, 0.07)
-  }
-
-  const calcNormal = createCalcNormal(scene, EPSILON)
 
   return main
 }

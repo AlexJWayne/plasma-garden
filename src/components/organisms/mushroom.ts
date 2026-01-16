@@ -273,7 +273,7 @@ function createFragmentProgram(
     },
   )
 
-  function scene(p: v3f, mushroom: MushroomStruct): number {
+  function sdSurface(p: v3f, mushroom: MushroomStruct): number {
     'use gpu'
     const localP = p.sub(mushroom.pos)
 
@@ -324,13 +324,13 @@ function createFragmentProgram(
     return opSmoothDifference(opUnion(stem, cap), expiry, 0.1)
   }
 
-  const raymarch = createRaymarch(scene, {
+  const raymarch = createRaymarch(sdSurface, {
     maxSteps: MAX_STEPS,
     maxDistance: MAX_DISTANCE,
     epsilon: EPSILON,
   })
 
-  const calcNormalBase = createCalcNormal(scene, EPSILON)
+  const calcNormalBase = createCalcNormal(sdSurface, EPSILON)
 
   function calcNormal(p: v3f, entityPos: v3f, mushroom: MushroomStruct): v3f {
     'use gpu'

@@ -9,16 +9,13 @@ import {
 } from 'typegpu/data'
 import { length, normalize } from 'typegpu/std'
 
-type SdfFn<T, R = number> = (p: v3f, arg: T) => R
-
-export const RayHit = struct({
-  isHit: bool,
-  pos: vec3f,
-})
+export const RayHit = struct({ isHit: bool, pos: vec3f })
 export type RayHit = Infer<typeof RayHit>
 
+type SdSurface<T, R = number> = (p: v3f, arg: T) => R
+
 export function createRaymarch<T>(
-  sdfFn: SdfFn<T>,
+  sdSurface: SdSurface<T>,
   {
     maxSteps,
     maxDistance,
@@ -40,7 +37,7 @@ export function createRaymarch<T>(
 
     for (let i = 0; i < maxSteps; i++) {
       const point = cameraPos.add(rayDirection.mul(totalDistance))
-      const distance = sdfFn(point, arg)
+      const distance = sdSurface(point, arg)
 
       if (distance < epsilon) return RayHit({ isHit: true, pos: point })
       if (distance > maxDistance) break
@@ -53,22 +50,22 @@ export function createRaymarch<T>(
 }
 
 export function createCalcNormal<T>(
-  sdfFn: SdfFn<T>,
+  sdSurface: SdSurface<T>,
   epsilon: number,
-): SdfFn<T, v3f> {
+): SdSurface<T, v3f> {
   return function calcNormal(p: v3f, arg: T): v3f {
     'use gpu'
     const k = vec2f(1, -1)
     return normalize(
       k.xyy
-        .mul(sdfFn(p.add(k.xyy.mul(epsilon)), arg))
+        .mul(sdSurface(p.add(k.xyy.mul(epsilon)), arg))
         .add(
           k.yyx
-            .mul(sdfFn(p.add(k.yyx.mul(epsilon)), arg))
+            .mul(sdSurface(p.add(k.yyx.mul(epsilon)), arg))
             .add(
               k.yxy
-                .mul(sdfFn(p.add(k.yxy.mul(epsilon)), arg))
-                .add(k.xxx.mul(sdfFn(p.add(k.xxx.mul(epsilon)), arg))),
+                .mul(sdSurface(p.add(k.yxy.mul(epsilon)), arg))
+                .add(k.xxx.mul(sdSurface(p.add(k.xxx.mul(epsilon)), arg))),
             ),
         ),
     )

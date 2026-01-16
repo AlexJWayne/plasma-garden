@@ -81,13 +81,9 @@ function createVertexProgram(
 function createFragmentProgram(
   cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
 ) {
-  const MAX_DISTANCE = f32(20)
-  const MAX_STEPS = 50
-  const EPSILON = 0.01
-
   const COLOR = vec3f(0.2, 0.3, 0.1)
 
-  function scene(p: v3f, _dummyArg: number): number {
+  function sdSurface(p: v3f, _dummyArg: number): number {
     'use gpu'
 
     const repeatedP = vec3f(p.xy.sub(round(p.xy.div(1))), p.z)
@@ -98,11 +94,11 @@ function createFragmentProgram(
       0.1,
     )
   }
-  const calcNormal = createCalcNormal(scene, EPSILON)
-  const raymarch = createRaymarch(scene, {
-    maxSteps: MAX_STEPS,
-    maxDistance: MAX_DISTANCE,
-    epsilon: EPSILON,
+  const calcNormal = createCalcNormal(sdSurface, 0.01)
+  const raymarch = createRaymarch(sdSurface, {
+    maxSteps: 20,
+    maxDistance: 50,
+    epsilon: 0.01,
   })
 
   const main = tgpu['~unstable'].fragmentFn({
