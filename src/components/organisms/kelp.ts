@@ -4,7 +4,6 @@ import { addEntity, query, set } from 'bitecs'
 import tgpu, { type TgpuBufferUniform } from 'typegpu'
 import {
   type Infer,
-  bool,
   builtin,
   f32,
   struct,
@@ -13,7 +12,7 @@ import {
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import { abs, length, normalize, saturate, sin, smoothstep } from 'typegpu/std'
+import { abs, saturate, sin, smoothstep } from 'typegpu/std'
 
 import { createInstanceBuffer } from '../../lib/buffers'
 import { cubeVertex, cubeVertices } from '../../lib/geometry'
