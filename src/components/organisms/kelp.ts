@@ -39,7 +39,7 @@ import { type CameraStruct } from '../game/camera'
 import { GridPosition, getRandomEmptyGridPosition } from '../general/grid'
 import { Lifetime, getLifetimeCompletion } from '../general/lifetime'
 
-const DEBUG = true
+const DEBUG = false
 
 type Kelp = {
   height: number
