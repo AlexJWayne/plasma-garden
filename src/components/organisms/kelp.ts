@@ -17,7 +17,7 @@ import { abs, saturate, sin, smoothstep } from 'typegpu/std'
 import { createInstanceBuffer } from '../../lib/buffers'
 import { cubeVertices } from '../../lib/geometry'
 import { hsl2rgb } from '../../lib/hsl'
-import { Surface } from '../../lib/lighting'
+import { SurfaceColors } from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { randomRange } from '../../lib/random'
 import { sdLink } from '../../lib/sdf'
@@ -167,7 +167,7 @@ function createShaderProgram(
     return opSmoothUnion(membrane, border, 0.07)
   }
 
-  function calcSurfaceColors(worldPos: v3f, kelp: KelpStruct): Surface {
+  function calcSurfaceColors(worldPos: v3f, kelp: KelpStruct): SurfaceColors {
     'use gpu'
 
     const twistedP = calcTwistedP(worldPos, kelp)
@@ -185,7 +185,7 @@ function createShaderProgram(
       ).mul(12),
     )
 
-    return Surface({
+    return SurfaceColors({
       diffuse: hsl2rgb(
         vec3f(
           0.33, //

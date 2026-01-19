@@ -13,7 +13,7 @@ import { select } from 'typegpu/std'
 import type { CameraStruct } from '../components/game/camera'
 
 import { cubeVertices } from './geometry'
-import { Lighting, Surface, calcSurfaceLighting } from './lighting'
+import { Lighting, SurfaceColors, calcSurfaceLighting } from './lighting'
 import { type SdSurface, createCalcNormal, createRaymarch } from './raymarching'
 
 export function createSdfSurfaceShaders() {}
@@ -62,7 +62,7 @@ export function createGetFragmentResult<T>({
   debug = false,
 }: {
   sdSurface: SdSurface<T>
-  calcSurfaceColors: (p: v3f, entity: T) => Surface
+  calcSurfaceColors: (p: v3f, entity: T) => SurfaceColors
 
   maxSteps: number
   maxDistance: number

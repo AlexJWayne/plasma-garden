@@ -12,7 +12,7 @@ import { length, normalize } from 'typegpu/std'
 export const RayHit = struct({ isHit: bool, pos: vec3f })
 export type RayHit = Infer<typeof RayHit>
 
-type SdSurface<T, R = number> = (p: v3f, arg: T) => R
+export type SdSurface<T, R = number> = (p: v3f, arg: T) => R
 
 export function createRaymarch<T>(
   sdSurface: SdSurface<T>,

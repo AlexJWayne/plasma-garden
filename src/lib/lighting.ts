@@ -6,20 +6,20 @@ import { remap } from './remap'
 const FALLOFF_START = f32(2)
 const FALLOFF_END = f32(8)
 
-export const Surface = struct({
+export const SurfaceColors = struct({
   diffuse: vec3f,
   specular: vec3f,
   emissive: vec3f,
   shininess: f32,
 })
-export type Surface = Infer<typeof Surface>
+export type SurfaceColors = Infer<typeof SurfaceColors>
 
 export const Lighting = struct({
   cameraPos: vec3f,
   lightPos: vec3f,
   surfacePos: vec3f,
   normal: vec3f,
-  surface: Surface,
+  surface: SurfaceColors,
 })
 export type Lighting = Infer<typeof Lighting>
 

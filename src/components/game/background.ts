@@ -5,7 +5,11 @@ import { clamp, mix, round } from 'typegpu/std'
 
 import { dither } from '../../lib/dither'
 import { quadVertices } from '../../lib/geometry'
-import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
+import {
+  Lighting,
+  SurfaceColors,
+  calcSurfaceLighting,
+} from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { createCalcNormal, createRaymarch } from '../../lib/raymarching'
 import {
@@ -106,7 +110,7 @@ function createFragmentProgram(
           lightPos: cameraBuffer.$.playerPos,
           surfacePos: hit.pos,
           normal: calcNormal(hit.pos, 0),
-          surface: Surface({
+          surface: SurfaceColors({
             diffuse: getColor(hit.pos).mul(0.8),
             specular: vec3f(0.1),
             emissive: vec3f(0),

@@ -24,7 +24,11 @@ import { createInstanceBuffer } from '../../lib/buffers'
 import { easeInCubic, easeInSine, easeOutSine } from '../../lib/ease'
 import { cubeVertex, cubeVertices } from '../../lib/geometry'
 import { hsl2rgb } from '../../lib/hsl'
-import { Lighting, Surface, calcSurfaceLighting } from '../../lib/lighting'
+import {
+  Lighting,
+  SurfaceColors,
+  calcSurfaceLighting,
+} from '../../lib/lighting'
 import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { createCalcNormal, createRaymarch } from '../../lib/raymarching'
 import { remap } from '../../lib/remap'
@@ -344,7 +348,10 @@ function createFragmentProgram(
     return normal
   }
 
-  function calcSurfaceColors(hitPos: v3f, mushroom: MushroomStruct): Surface {
+  function calcSurfaceColors(
+    hitPos: v3f,
+    mushroom: MushroomStruct,
+  ): SurfaceColors {
     'use gpu'
 
     const baseHueShift =
@@ -379,7 +386,7 @@ function createFragmentProgram(
       .add(vec3f(glowWhiteValue))
       .mul(easeInCubic(hitPos.z / mushroom.height))
 
-    return Surface({
+    return SurfaceColors({
       diffuse: baseColor,
       specular: vec3f(1, 0.5, 0),
       emissive: glowColor,
