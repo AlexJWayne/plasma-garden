@@ -1,20 +1,19 @@
 import { perlin3d } from '@typegpu/noise'
 import { opExtrudeY, opSmoothUnion, sdLine } from '@typegpu/sdf'
 import { addEntity, query, set } from 'bitecs'
-import tgpu, { type TgpuBufferUniform } from 'typegpu'
+import { type TgpuBufferReadonly, type TgpuBufferUniform } from 'typegpu'
 import {
   type Infer,
-  builtin,
+  type WgslArray,
+  arrayOf,
   f32,
   struct,
   type v3f,
   vec2f,
   vec3f,
-  vec4f,
 } from 'typegpu/data'
 import { abs, saturate, sin, smoothstep } from 'typegpu/std'
 
-import { createInstanceBuffer } from '../../lib/buffers'
 import { cubeVertices } from '../../lib/geometry'
 import { hsl2rgb } from '../../lib/hsl'
 import { SurfaceColors } from '../../lib/lighting'
@@ -23,8 +22,8 @@ import { randomRange } from '../../lib/random'
 import { sdLink } from '../../lib/sdf'
 import {
   AABB,
-  createSdfEntityShaderImplementations,
-} from '../../lib/sdf-entity-pipeline'
+  createSDFInstanceShaderProgram,
+} from '../../lib/sdf-instance-pipeline'
 import { rotate2d } from '../../lib/transform'
 import {
   blending,
@@ -78,18 +77,17 @@ export function spawnKelpSystem(world: World): void {
 }
 
 export function createRenderKelpSystem(world: World) {
-  const [kelpsBuffer, kelpsLayout] = createInstanceBuffer(
-    world,
-    KelpStruct,
-    1000,
-  )
+  const kelpsBuffer = world.root
+    .createBuffer(arrayOf(KelpStruct, 400))
+    .$usage('storage')
 
   const { vertexProgram, fragmentProgram } = createShaderProgram(
     world.camera.buffer.as('uniform'),
+    kelpsBuffer.as('readonly'),
   )
 
   const pipeline = world.root['~unstable']
-    .withVertex(vertexProgram, kelpsLayout.attrib)
+    .withVertex(vertexProgram)
     .withFragment(fragmentProgram, {
       color: { format: presentationFormat, blend: blending.normal },
     })
@@ -97,7 +95,6 @@ export function createRenderKelpSystem(world: World) {
     .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
     .withMultisample({ count: sampleCount })
     .createPipeline()
-    .with(kelpsLayout, kelpsBuffer)
     .withPerformanceCallback(createPipelinePerformanceCallback('kelps'))
 
   function render(world: World) {
@@ -128,6 +125,7 @@ export function createRenderKelpSystem(world: World) {
 
 function createShaderProgram(
   cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
+  kelpsBuffer: TgpuBufferReadonly<WgslArray<typeof KelpStruct>>,
 ) {
   function calcTwistedP(p: v3f, kelp: KelpStruct): v3f {
     'use gpu'
@@ -138,155 +136,88 @@ function createShaderProgram(
     return vec3f(rotate2d(localP.xy, twistAngle), localP.z)
   }
 
-  const { getVertexResult, getFragmentResult } =
-    createSdfEntityShaderImplementations<KelpStruct>({
-      calcAABB: ({ entityPos, height, growth }) => {
-        'use gpu'
-        const horizontalExtent = (0.9 * (1 - growth)) / 2
-        return AABB({
-          min: entityPos.add(vec3f(vec2f(-horizontalExtent), 0)),
-          max: entityPos.add(vec3f(vec2f(horizontalExtent), height * growth)),
-        })
-      },
+  return createSDFInstanceShaderProgram<typeof KelpStruct>({
+    cameraBuffer,
+    instanceBuffer: kelpsBuffer,
 
-      sdSurface: (p: v3f, kelp: KelpStruct): number => {
-        'use gpu'
+    calcAABB: ({ entityPos, height, growth }) => {
+      'use gpu'
+      const horizontalExtent = (0.9 * (1 - growth)) / 2
+      return AABB({
+        min: entityPos.add(vec3f(vec2f(-horizontalExtent), 0)),
+        max: entityPos.add(vec3f(vec2f(horizontalExtent), height * growth)),
+      })
+    },
 
-        const twistedP = calcTwistedP(p, kelp)
-        const narrowness = 1 - kelp.growth
-        const height = kelp.height * kelp.growth
+    sdSurface: (p: v3f, kelp: KelpStruct): number => {
+      'use gpu'
 
-        const linkThickness = 0.03
-        const radius = narrowness * 0.4 - linkThickness
+      const twistedP = calcTwistedP(p, kelp)
+      const narrowness = 1 - kelp.growth
+      const height = kelp.height * kelp.growth
 
-        const membrane2d =
-          sdLine(
-            twistedP.xz,
-            vec2f(0, -radius),
-            vec2f(0, height - radius - linkThickness),
-          ) - radius
-        const membrane = opExtrudeY(twistedP, membrane2d, 0.01)
+      const linkThickness = 0.03
+      const radius = narrowness * 0.4 - linkThickness
 
-        const membraneCenter = height * 0.5 - radius - linkThickness
-        const centeredP = twistedP.sub(vec3f(0, 0, membraneCenter))
-        const offsetP = vec3f(centeredP.xzy)
-        const border = sdLink(offsetP, height * 0.5, radius, linkThickness)
+      const membrane2d =
+        sdLine(
+          twistedP.xz,
+          vec2f(0, -radius),
+          vec2f(0, height - radius - linkThickness),
+        ) - radius
+      const membrane = opExtrudeY(twistedP, membrane2d, 0.01)
 
-        return opSmoothUnion(membrane, border, 0.07)
-      },
+      const membraneCenter = height * 0.5 - radius - linkThickness
+      const centeredP = twistedP.sub(vec3f(0, 0, membraneCenter))
+      const offsetP = vec3f(centeredP.xzy)
+      const border = sdLink(offsetP, height * 0.5, radius, linkThickness)
 
-      calcSurfaceColors: (worldPos: v3f, kelp: KelpStruct): SurfaceColors => {
-        'use gpu'
+      return opSmoothUnion(membrane, border, 0.07)
+    },
 
-        const twistedP = calcTwistedP(worldPos, kelp)
-        const p = twistedP.xz
+    calcSurfaceColors: (worldPos: v3f, kelp: KelpStruct): SurfaceColors => {
+      'use gpu'
 
-        const amplitude = sin((p.y - kelp.growth * 2) * 20) * 0.025
-        const waveD = abs(p.x - amplitude)
-        const waveGlow = smoothstep(0.1, 0, waveD) ** 8
+      const twistedP = calcTwistedP(worldPos, kelp)
+      const p = twistedP.xz
 
-        const noise = perlin3d.sample(
+      const amplitude = sin((p.y - kelp.growth * 2) * 20) * 0.025
+      const waveD = abs(p.x - amplitude)
+      const waveGlow = smoothstep(0.1, 0, waveD) ** 8
+
+      const noise = perlin3d.sample(
+        vec3f(
+          p.x, //
+          p.y - kelp.growth * 5,
+          kelp.growth * 0.25,
+        ).mul(12),
+      )
+
+      return SurfaceColors({
+        diffuse: hsl2rgb(
           vec3f(
-            p.x, //
-            p.y - kelp.growth * 5,
-            kelp.growth * 0.25,
-          ).mul(12),
-        )
-
-        return SurfaceColors({
-          diffuse: hsl2rgb(
-            vec3f(
-              0.33, //
-              0.4 + waveD * 0.5,
-              0.08 + waveD,
-            ),
+            0.33, //
+            0.4 + waveD * 0.5,
+            0.08 + waveD,
           ),
-          specular: hsl2rgb(vec3f(0.5, 0.5, saturate(noise))),
-          emissive: hsl2rgb(
-            vec3f(
-              0.6,
-              0.7,
-              saturate(waveGlow + smoothstep(0.0, 0.7, noise)) ** 4,
-            ).mul(0.8),
-          ),
-          shininess: f32(32),
-        })
-      },
+        ),
+        specular: hsl2rgb(vec3f(0.5, 0.5, saturate(noise))),
+        emissive: hsl2rgb(
+          vec3f(
+            0.6,
+            0.7,
+            saturate(waveGlow + smoothstep(0.0, 0.7, noise)) ** 4,
+          ).mul(0.8),
+        ),
+        shininess: f32(32),
+      })
+    },
 
-      maxSteps: 100,
-      maxDistance: 100,
-      epsilon: 0.003,
-      epsilonNormal: 0.01,
+    maxSteps: 100,
+    maxDistance: 100,
+    epsilon: 0.003,
+    epsilonNormal: 0.01,
 
-      debug: false,
-    })
-
-  return {
-    vertexProgram: tgpu['~unstable'].vertexFn({
-      in: {
-        vertexIdx: builtin.vertexIndex,
-        entityPos: vec3f,
-        height: f32,
-        growth: f32,
-        twist: f32,
-        seed: f32,
-      },
-      out: {
-        worldPos: vec3f,
-        clipPos: builtin.position,
-
-        entityPos: vec3f,
-        height: f32,
-        growth: f32,
-        seed: f32,
-        twist: f32,
-      },
-    })(({ vertexIdx, entityPos, height, growth, twist, seed }) => {
-      const pos = getVertexResult(
-        cameraBuffer.$.viewMatrix,
-        vertexIdx,
-        KelpStruct({
-          entityPos,
-          height,
-          growth,
-          seed,
-          twist,
-        }),
-      )
-
-      return {
-        worldPos: pos.world,
-        clipPos: pos.clip,
-
-        entityPos,
-        height,
-        growth,
-        seed,
-        twist,
-      }
-    }),
-
-    fragmentProgram: tgpu['~unstable'].fragmentFn({
-      in: {
-        worldPos: vec3f,
-
-        entityPos: vec3f,
-        height: f32,
-        growth: f32,
-        twist: f32,
-        seed: f32,
-      },
-      out: {
-        color: vec4f,
-        depth: builtin.fragDepth,
-      },
-    })(({ worldPos, entityPos, height, growth, twist, seed }) => {
-      const result = getFragmentResult(
-        cameraBuffer.$,
-        worldPos,
-        KelpStruct({ entityPos, height, growth, twist, seed }),
-      )
-      return { color: result.color, depth: result.depth }
-    }),
-  }
+    debug: false,
+  })
 }

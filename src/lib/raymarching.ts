@@ -1,4 +1,5 @@
 import {
+  type BaseData,
   type Infer,
   bool,
   f32,
@@ -14,7 +15,7 @@ export type RayHit = Infer<typeof RayHit>
 
 export type SdSurface<T, R = number> = (p: v3f, arg: T) => R
 
-export function createRaymarch<T>(
+export function createRaymarch<T extends BaseData>(
   sdSurface: SdSurface<T>,
   {
     maxSteps,
