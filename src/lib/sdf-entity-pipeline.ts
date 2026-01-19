@@ -1,20 +1,22 @@
 import {
   type Infer,
+  bool,
   f32,
   type m4x4f,
   struct,
   type v3f,
+  vec2f,
   vec3b,
   vec3f,
   vec4f,
 } from 'typegpu/data'
-import { select } from 'typegpu/std'
+import { length, normalize, select } from 'typegpu/std'
 
 import type { CameraStruct } from '../components/game/camera'
 
 import { cubeVertices } from './geometry'
 import { Lighting, SurfaceColors, calcSurfaceLighting } from './lighting'
-import { type SdSurface, createCalcNormal, createRaymarch } from './raymarching'
+import { type SdSurface } from './raymarching'
 
 export function createSdfSurfaceShaders() {}
 
@@ -27,6 +29,12 @@ export const EntityPositions = struct({
   clip: vec4f,
 })
 export type EntityPositions = Infer<typeof EntityPositions>
+
+export const RayHit = struct({ isHit: bool, pos: vec3f })
+export type RayHit = Infer<typeof RayHit>
+
+const FragmentResult = struct({ color: vec4f, depth: f32 })
+type FragmentResult = Infer<typeof FragmentResult>
 
 /** Returns the world and clip positions of a vertex index and an AABB. */
 export function getVertexResult(
@@ -49,7 +57,66 @@ export function getVertexResult(
   return EntityPositions({ local, world, clip })
 }
 
-const FragmentResult = struct({ color: vec4f, depth: f32 })
+export function createSdfEntityShaderImplementations<T>({
+  calcAABB,
+  sdSurface,
+  calcSurfaceColors,
+
+  maxSteps,
+  maxDistance,
+  epsilon,
+  epsilonNormal = epsilon,
+
+  debug = false,
+}: {
+  calcAABB: (entity: T) => AABB
+  sdSurface: SdSurface<T>
+  calcSurfaceColors: (p: v3f, entity: T) => SurfaceColors
+
+  maxSteps: number
+  maxDistance: number
+  epsilon: number
+  epsilonNormal: number
+
+  debug?: boolean
+}) {
+  return {
+    getVertexResult: createGetVertexResult(calcAABB),
+    getFragmentResult: createGetFragmentResult({
+      sdSurface,
+      calcSurfaceColors,
+      maxSteps,
+      maxDistance,
+      epsilon,
+      epsilonNormal,
+      debug,
+    }),
+  }
+}
+
+function createGetVertexResult<T>(calcAABB: (entity: T) => AABB) {
+  return function getVertexResult(
+    cameraViewMatrix: m4x4f,
+    vertexIdx: number,
+    entity: T,
+  ): EntityPositions {
+    'use gpu'
+
+    const local = cubeVertices.$[vertexIdx]
+
+    const aabb = calcAABB(entity)
+    const world = select(
+      aabb.min,
+      aabb.max,
+      vec3b(local.x > 0, local.y > 0, local.z > 0),
+    )
+
+    const clip = cameraViewMatrix.mul(vec4f(world, 1))
+
+    return EntityPositions({ local, world, clip })
+  }
+}
+
 export function createGetFragmentResult<T>({
   sdSurface,
   calcSurfaceColors,
@@ -71,14 +138,51 @@ export function createGetFragmentResult<T>({
 
   debug?: boolean
 }) {
-  const raymarch = createRaymarch(sdSurface, { maxSteps, maxDistance, epsilon })
-  const calcNormal = createCalcNormal(sdSurface, epsilonNormal)
+  function raymarch(cameraPos: v3f, worldPos: v3f, arg: T): RayHit {
+    'use gpu'
+
+    const triDiff = worldPos.sub(cameraPos)
+    let totalDistance = length(triDiff)
+    const rayDirection = normalize(triDiff)
+
+    for (let i = 0; i < maxSteps; i++) {
+      const point = cameraPos.add(rayDirection.mul(totalDistance))
+      const distance = sdSurface(point, arg)
+
+      if (distance < epsilon) return RayHit({ isHit: true, pos: point })
+      if (distance > maxDistance) break
+
+      totalDistance += distance
+    }
+
+    return RayHit({ isHit: false, pos: vec3f() })
+  }
+
+  function calcNormal(p: v3f, arg: T): v3f {
+    'use gpu'
+    const k = vec2f(1, -1)
+    return normalize(
+      k.xyy
+        .mul(sdSurface(p.add(k.xyy.mul(epsilonNormal)), arg))
+        .add(
+          k.yyx
+            .mul(sdSurface(p.add(k.yyx.mul(epsilonNormal)), arg))
+            .add(
+              k.yxy
+                .mul(sdSurface(p.add(k.yxy.mul(epsilonNormal)), arg))
+                .add(
+                  k.xxx.mul(sdSurface(p.add(k.xxx.mul(epsilonNormal)), arg)),
+                ),
+            ),
+        ),
+    )
+  }
 
   return function getFragmentResult(
     cameraBuffer: Infer<typeof CameraStruct>,
     worldPos: v3f,
     entity: T,
-  ) {
+  ): FragmentResult {
     'use gpu'
 
     const rayHit = raymarch(cameraBuffer.pos, worldPos, entity)
