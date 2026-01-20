@@ -10,7 +10,7 @@ import { addEntity, query, set } from 'bitecs'
 import { type Infer, arrayOf, f32, struct, vec3f } from 'typegpu/data'
 import { abs, atan2, clamp, fract, sin, smoothstep } from 'typegpu/std'
 
-import { easeInCubic, easeInSine, easeOutSine } from '../../lib/ease'
+import { easeInCubic, easeInSine } from '../../lib/ease'
 import { hsl2rgb } from '../../lib/hsl'
 import { SurfaceColors } from '../../lib/lighting'
 import { remap } from '../../lib/remap'
