@@ -56,7 +56,7 @@ export function createSDFInstancesRenderer<T extends BaseData>({
   calcSurfaceColors,
   postProcessNormal = (n) => {
     'use gpu'
-    return vec3f(n.x, n.y, n.z)
+    return vec3f(n)
   },
 
   maxSteps,

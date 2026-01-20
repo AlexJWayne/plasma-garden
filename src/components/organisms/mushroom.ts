@@ -38,7 +38,6 @@ const MushroomStruct = struct({
   lobes: f32,
   stemRadius: f32,
   capRadius: f32,
-  alpha: f32,
   completion: f32,
 })
 type MushroomStruct = Infer<typeof MushroomStruct>
@@ -95,7 +94,6 @@ export function createRenderMushroomSystem(world: World) {
               lobes: Mushroom[eid].lobes,
               stemRadius: Mushroom[eid].stemRadius,
               capRadius: Mushroom[eid].capRadius,
-              alpha: clamp(remap(easeOutSine(completion), 0.9, 1, 1, 0), 0, 1),
               completion,
             },
           }
@@ -117,7 +115,7 @@ export function createRenderMushroomSystem(world: World) {
       })
     },
 
-    sdSurface: (p, mushroom): number => {
+    sdSurface: (p, mushroom) => {
       'use gpu'
       const localP = p.sub(mushroom.pos)
 
