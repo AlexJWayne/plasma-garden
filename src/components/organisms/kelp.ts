@@ -1,10 +1,8 @@
 import { perlin3d } from '@typegpu/noise'
 import { opExtrudeY, opSmoothUnion, sdLine } from '@typegpu/sdf'
 import { addEntity, query, set } from 'bitecs'
-import { type TgpuBufferReadonly, type TgpuBufferUniform } from 'typegpu'
 import {
   type Infer,
-  type WgslArray,
   arrayOf,
   f32,
   struct,
@@ -14,26 +12,16 @@ import {
 } from 'typegpu/data'
 import { abs, saturate, sin, smoothstep } from 'typegpu/std'
 
-import { cubeVertices } from '../../lib/geometry'
 import { hsl2rgb } from '../../lib/hsl'
 import { SurfaceColors } from '../../lib/lighting'
-import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
 import { randomRange } from '../../lib/random'
 import { sdLink } from '../../lib/sdf'
 import {
   AABB,
-  createSDFInstanceShaderProgram,
+  createSDFInstancesRenderer,
 } from '../../lib/sdf-instance-pipeline'
 import { rotate2d } from '../../lib/transform'
-import {
-  blending,
-  createColorAttachment,
-  createDepthAttachment,
-  depthStencil,
-} from '../../lib/web-gpu'
 import type { World } from '../../main'
-import { presentationFormat, sampleCount } from '../../setup-webgpu'
-import { type CameraStruct } from '../game/camera'
 import { GridPosition, getRandomEmptyGridPosition } from '../general/grid'
 import { Lifetime, getLifetimeCompletion } from '../general/lifetime'
 
@@ -81,64 +69,32 @@ export function createRenderKelpSystem(world: World) {
     .createBuffer(arrayOf(KelpStruct, 400))
     .$usage('storage')
 
-  const { vertexProgram, fragmentProgram } = createShaderProgram(
-    world.camera.buffer.as('uniform'),
-    kelpsBuffer.as('readonly'),
-  )
+  const renderKelpSystem = createSDFInstancesRenderer({
+    name: 'Kelp',
+    world,
 
-  const pipeline = world.root['~unstable']
-    .withVertex(vertexProgram)
-    .withFragment(fragmentProgram, {
-      color: { format: presentationFormat, blend: blending.normal },
-    })
-    .withDepthStencil(depthStencil)
-    .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
-    .withMultisample({ count: sampleCount })
-    .createPipeline()
-    .withPerformanceCallback(createPipelinePerformanceCallback('kelps'))
+    cameraBuffer: world.camera.buffer.as('uniform'),
+    instanceBuffer: kelpsBuffer.as('readonly'),
 
-  function render(world: World) {
-    const kelps = query(world, [Kelp, GridPosition, Lifetime])
-    if (kelps.length === 0) return
+    writeBuffers: () => {
+      const kelps = query(world, [Kelp, GridPosition, Lifetime])
+      if (kelps.length === 0) return 0
 
-    kelpsBuffer.writePartial(
-      [...kelps].map((eid, idx) => ({
-        idx,
-        value: {
-          entityPos: vec3f(GridPosition[eid], 0),
-          height: Kelp[eid].height,
-          growth: getLifetimeCompletion(world, eid),
-          twist: Kelp[eid].twist,
-          seed: Kelp[eid].seed,
-        },
-      })),
-    )
+      kelpsBuffer.writePartial(
+        [...kelps].map((eid, idx) => ({
+          idx,
+          value: {
+            entityPos: vec3f(GridPosition[eid], 0),
+            height: Kelp[eid].height,
+            growth: getLifetimeCompletion(world, eid),
+            twist: Kelp[eid].twist,
+            seed: Kelp[eid].seed,
+          },
+        })),
+      )
 
-    pipeline
-      .withColorAttachment({ color: createColorAttachment(world) })
-      .withDepthStencilAttachment(createDepthAttachment(world))
-      .draw(cubeVertices.$.length, kelps.length)
-  }
-
-  return render
-}
-
-function createShaderProgram(
-  cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
-  kelpsBuffer: TgpuBufferReadonly<WgslArray<typeof KelpStruct>>,
-) {
-  function calcTwistedP(p: v3f, kelp: KelpStruct): v3f {
-    'use gpu'
-
-    const localP = p.sub(kelp.entityPos)
-    const twistAngle = localP.z * kelp.twist + (Math.PI / 2) * kelp.seed
-
-    return vec3f(rotate2d(localP.xy, twistAngle), localP.z)
-  }
-
-  return createSDFInstanceShaderProgram<typeof KelpStruct>({
-    cameraBuffer,
-    instanceBuffer: kelpsBuffer,
+      return kelps.length
+    },
 
     calcAABB: ({ entityPos, height, growth }) => {
       'use gpu'
@@ -149,7 +105,7 @@ function createShaderProgram(
       })
     },
 
-    sdSurface: (p: v3f, kelp: KelpStruct): number => {
+    sdSurface: (p, kelp): number => {
       'use gpu'
 
       const twistedP = calcTwistedP(p, kelp)
@@ -175,7 +131,7 @@ function createShaderProgram(
       return opSmoothUnion(membrane, border, 0.07)
     },
 
-    calcSurfaceColors: (worldPos: v3f, kelp: KelpStruct): SurfaceColors => {
+    calcSurfaceColors: (worldPos, kelp) => {
       'use gpu'
 
       const twistedP = calcTwistedP(worldPos, kelp)
@@ -220,4 +176,15 @@ function createShaderProgram(
 
     debug: false,
   })
+
+  return renderKelpSystem
+}
+
+function calcTwistedP(p: v3f, kelp: KelpStruct): v3f {
+  'use gpu'
+
+  const localP = p.sub(kelp.entityPos)
+  const twistAngle = localP.z * kelp.twist + (Math.PI / 2) * kelp.seed
+
+  return vec3f(rotate2d(localP.xy, twistAngle), localP.z)
 }
