@@ -123,7 +123,7 @@ function createFragmentProgram(
     return vec4f(vec3f(0.2), 1)
   })
 
-  function getColor(hitPos: v3f): v3f {
+  const getColor = (hitPos: v3f): v3f => {
     'use gpu'
     const repeatedP = vec2f(hitPos.xy.sub(round(hitPos.xy.div(1))))
     const d = clamp(sdBox2d(repeatedP, vec2f(0.35)) * 6, 0, 1)

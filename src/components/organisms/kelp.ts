@@ -181,7 +181,7 @@ export function createRenderKelpSystem(world: World) {
   return renderKelpSystem
 }
 
-function calcTwistedP(p: v3f, kelp: KelpStruct): v3f {
+const calcTwistedP = (p: v3f, kelp: KelpStruct): v3f => {
   'use gpu'
 
   const localP = p.sub(kelp.entityPos)

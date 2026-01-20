@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "container:exec": "docker exec -it plasma-garden-dev bash",
+    "container:opencode": "docker exec -it plasma-garden-dev opencode",
+    "container:work": "docker exec -it plasma-garden-dev bash -c \"cd /workspaces/plasma-garden && exec bash\"",
+    "container:rm": "docker stop plasma-garden-dev && docker rm plasma-garden-dev"
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^6.0.0",

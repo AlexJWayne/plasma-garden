@@ -144,7 +144,7 @@ function scene(p: v3f, player: PlayerStruct): number {
 const Hit = struct({ hit: bool, pos: vec3f })
 type Hit = Infer<typeof Hit>
 
-function raymarch(cameraPos: v3f, worldPos: v3f, player: PlayerStruct): Hit {
+const raymarch = (cameraPos: v3f, worldPos: v3f, player: PlayerStruct): Hit => {
   'use gpu'
 
   const MAX_DISTANCE = f32(20)
