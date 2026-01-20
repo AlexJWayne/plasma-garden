@@ -75,6 +75,7 @@ export function createRenderKelpSystem(world: World) {
 
     cameraBuffer: world.camera.buffer.as('uniform'),
     instanceBuffer: kelpsBuffer.as('readonly'),
+    timeBuffer: world.time.buffer.as('uniform'),
 
     writeBuffers: () => {
       const kelps = query(world, [Kelp, GridPosition, Lifetime])
@@ -131,7 +132,7 @@ export function createRenderKelpSystem(world: World) {
       return opSmoothUnion(membrane, border, 0.07)
     },
 
-    calcSurfaceColors: (worldPos, kelp) => {
+    calcSurfaceColors: (worldPos, kelp, _elapsed) => {
       'use gpu'
 
       const twistedP = calcTwistedP(worldPos, kelp)

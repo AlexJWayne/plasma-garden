@@ -19,6 +19,7 @@ import { length, normalize, select } from 'typegpu/std'
 import type { CameraStruct } from '../components/game/camera'
 import type { World } from '../main'
 import { presentationFormat, sampleCount } from '../setup-webgpu'
+import type { TimeStruct } from '../time'
 
 import { cubeVertices } from './geometry'
 import { Lighting, SurfaceColors, calcSurfaceLighting } from './lighting'
@@ -47,11 +48,16 @@ export function createSDFInstancesRenderer<T extends BaseData>({
 
   cameraBuffer,
   instanceBuffer,
+  timeBuffer,
 
   writeBuffers,
   calcAABB,
   sdSurface,
   calcSurfaceColors,
+  postProcessNormal = (n) => {
+    'use gpu'
+    return vec3f(n.x, n.y, n.z)
+  },
 
   maxSteps,
   maxDistance,
@@ -65,6 +71,9 @@ export function createSDFInstancesRenderer<T extends BaseData>({
 
   /** Name of the pipeline for debugging and performance tracking. */
   name: string
+
+  /** Time buffer for time-based animations in shaders. */
+  timeBuffer: TgpuBufferUniform<typeof TimeStruct>
 
   /** The global camera buffer. */
   cameraBuffer: TgpuBufferUniform<typeof CameraStruct>
@@ -82,7 +91,14 @@ export function createSDFInstancesRenderer<T extends BaseData>({
   sdSurface: SdSurface<Infer<T>>
 
   /** Calculate the surface colors (diffuse, specular, emissive, etc.) at a given point on the surface. */
-  calcSurfaceColors: (p: v3f, entity: Infer<T>) => SurfaceColors
+  calcSurfaceColors: (
+    p: v3f,
+    entity: Infer<T>,
+    elapsed: number,
+  ) => SurfaceColors
+
+  /** Optional post-processing function for normals. Defaults to identity. */
+  postProcessNormal?: (normal: v3f, p: v3f, entity: Infer<T>) => v3f
 
   /** Maximum number of raymarching steps. */
   maxSteps: number
@@ -93,8 +109,8 @@ export function createSDFInstancesRenderer<T extends BaseData>({
   /** Distance threshold for considering a ray as having hit the surface. */
   epsilon: number
 
-  /** Distance threshold for ray hits in normal calculation. */
-  epsilonNormal: number
+  /** Distance threshold for ray hits in normal calculation. Defaults to epsilon. */
+  epsilonNormal?: number
 
   /** Enable debug visualization. This shows all AABBs for all rendered instances. */
   debug?: boolean
@@ -191,13 +207,19 @@ export function createSDFInstancesRenderer<T extends BaseData>({
       return { color: vec4f(0), depth: 1 }
     }
 
+    const normal = postProcessNormal(
+      calcNormal(rayHit.pos, instance),
+      rayHit.pos,
+      instance,
+    )
+
     const color = calcSurfaceLighting(
       Lighting({
         cameraPos: cameraBuffer.$.pos,
         lightPos: cameraBuffer.$.playerPos,
         surfacePos: rayHit.pos,
-        normal: calcNormal(rayHit.pos, instance),
-        surface: calcSurfaceColors(rayHit.pos, instance),
+        normal,
+        surface: calcSurfaceColors(rayHit.pos, instance, timeBuffer.$.elapsed),
       }),
     )
 
@@ -218,6 +240,8 @@ export function createSDFInstancesRenderer<T extends BaseData>({
 
   return function render() {
     const count = writeBuffers()
+    if (count === 0) return
+
     pipeline
       .withColorAttachment({ color: createColorAttachment(world) })
       .withDepthStencilAttachment(createDepthAttachment(world))

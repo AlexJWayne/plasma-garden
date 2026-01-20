@@ -73,8 +73,8 @@ export function startGame(world: World) {
     positionCameraSystem(world)
     renderBackgroundSystem(world)
     renderPlayerSystem(world)
-    renderMushroomSystem(world)
-    renderKelpSystem(world)
+    renderMushroomSystem()
+    renderKelpSystem()
 
     requestAnimationFrame(tick)
   }
