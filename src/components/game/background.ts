@@ -1,134 +1,97 @@
 import { opSmoothDifference, sdBox2d, sdBox3d, sdSphere } from '@typegpu/sdf'
-import { type TgpuBufferUniform, tgpu } from 'typegpu'
-import { builtin, f32, type v3f, vec2f, vec3f, vec4f } from 'typegpu/data'
+import { addEntity, query } from 'bitecs'
+import { type Infer, arrayOf, f32, struct, vec2f, vec3f } from 'typegpu/data'
 import { clamp, mix, round } from 'typegpu/std'
 
-import { dither } from '../../lib/dither'
-import { quadVertices } from '../../lib/geometry'
+import { SurfaceColors } from '../../lib/lighting'
 import {
-  Lighting,
-  SurfaceColors,
-  calcSurfaceLighting,
-} from '../../lib/lighting'
-import { createPipelinePerformanceCallback } from '../../lib/pipeline-perf'
-import { createCalcNormal, createRaymarch } from '../../lib/raymarching'
-import {
-  createColorAttachment,
-  createDepthAttachment,
-  depthStencil,
-} from '../../lib/web-gpu'
+  AABB,
+  createSDFInstancesRenderer,
+} from '../../lib/sdf-instance-pipeline'
 import type { World } from '../../main'
-import { presentationFormat, sampleCount } from '../../setup-webgpu'
 
-import { CameraStruct, worldToClipSpace } from './camera'
+type Background = {}
+const Background = [] as Background[]
+
+const BackgroundStruct = struct({
+  pos: vec3f,
+})
+type BackgroundStruct = Infer<typeof BackgroundStruct>
+
+export function createBackgroundEntity(world: World): void {
+  addEntity(world, Background)
+}
 
 export function createRenderBackgroundSystem(world: World) {
-  const renderPipeline = world.root['~unstable']
-    .withVertex(createVertexProgram(world.camera.buffer.as('uniform')), {})
-    .withFragment(createFragmentProgram(world.camera.buffer.as('uniform')), {
-      format: presentationFormat,
-    })
-    .withDepthStencil(depthStencil)
-    .withMultisample({ count: sampleCount })
-    .createPipeline()
-    .withPerformanceCallback(createPipelinePerformanceCallback('background'))
+  const backgroundBuffer = world.root
+    .createBuffer(arrayOf(BackgroundStruct, 1))
+    .$usage('storage')
 
-  function render(world: World) {
-    renderPipeline
-      .withColorAttachment({
-        ...createColorAttachment(world),
-        loadOp: 'clear',
-      })
-      .withDepthStencilAttachment({
-        ...createDepthAttachment(world),
-        depthLoadOp: 'clear',
-        depthClearValue: 1,
-      })
-      .draw(quadVertices.$.length)
-  }
+  const baseRender = createSDFInstancesRenderer({
+    name: 'Background',
+    world,
 
-  return render
-}
+    cameraBuffer: world.camera.buffer.as('uniform'),
+    instanceBuffer: backgroundBuffer.as('readonly'),
+    timeBuffer: world.time.buffer.as('uniform'),
 
-function createVertexProgram(
-  cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
-) {
-  return tgpu['~unstable'].vertexFn({
-    in: { idx: builtin.vertexIndex },
-    out: {
-      worldPos: vec3f,
-      clipPos: builtin.position,
-      uv: vec2f,
+    writeBuffers: () => {
+      const backgrounds = query(world, [Background])
+      if (backgrounds.length === 0) return 0
+
+      backgroundBuffer.write([
+        {
+          pos: vec3f(0, 0, 0),
+        },
+      ])
+
+      return backgrounds.length
     },
-  })(({ idx }) => {
-    const uv = quadVertices.$[idx]
-    const worldPos = vec3f(uv.mul(10.5), 0)
-    const clipPos = worldToClipSpace(cameraBuffer.$, worldPos)
-    return {
-      worldPos,
-      clipPos,
-      uv,
-    }
-  })
-}
 
-function createFragmentProgram(
-  cameraBuffer: TgpuBufferUniform<typeof CameraStruct>,
-) {
-  const COLOR = vec3f(0.2, 0.3, 0.1)
+    calcAABB: () => {
+      'use gpu'
+      return AABB({
+        min: vec3f(-10.5, -10.5, -1),
+        max: vec3f(10.5, 10.5, 0),
+      })
+    },
 
-  function sdSurface(p: v3f, _dummyArg: number): number {
-    'use gpu'
+    sdSurface: (p, _bg): number => {
+      'use gpu'
 
-    const repeatedP = vec3f(p.xy.sub(round(p.xy.div(1))), p.z)
+      const repeatedP = vec3f(p.xy.sub(round(p.xy.div(1))), p.z)
 
-    return opSmoothDifference(
-      sdSphere(repeatedP.sub(vec3f(0, 0, -0.5)), 0.8),
-      sdBox3d(repeatedP.sub(vec3f(0, 0, 0.5)), vec3f(10, 10, 0.5)),
-      0.1,
-    )
-  }
-  const calcNormal = createCalcNormal(sdSurface, 0.01)
-  const raymarch = createRaymarch(sdSurface, {
+      return opSmoothDifference(
+        sdSphere(repeatedP.sub(vec3f(0, 0, -0.5)), 0.8),
+        sdBox3d(repeatedP.sub(vec3f(0, 0, 0.5)), vec3f(10, 10, 0.5)),
+        0.1,
+      )
+    },
+
+    calcSurfaceColors: (hitPos, _bg, _elapsed) => {
+      'use gpu'
+
+      const COLOR = vec3f(0.2, 0.3, 0.1)
+
+      const repeatedP = vec2f(hitPos.xy.sub(round(hitPos.xy.div(1))))
+      const d = clamp(sdBox2d(repeatedP, vec2f(0.35)) * 6, 0, 1)
+      const diffuseColor = mix(COLOR.mul(0.5), COLOR, d)
+
+      return SurfaceColors({
+        diffuse: diffuseColor.mul(0.8),
+        specular: vec3f(0.1),
+        emissive: vec3f(0),
+        shininess: f32(32),
+      })
+    },
+
     maxSteps: 20,
     maxDistance: 50,
     epsilon: 0.01,
+    epsilonNormal: 0.01,
+
+    debug: false,
   })
 
-  const main = tgpu['~unstable'].fragmentFn({
-    in: {
-      worldPos: vec3f,
-      clipPos: builtin.position,
-    },
-    out: vec4f,
-  })(({ worldPos, clipPos }) => {
-    const hit = raymarch(cameraBuffer.$.pos, worldPos, 0)
-    if (hit.isHit) {
-      const color = calcSurfaceLighting(
-        Lighting({
-          cameraPos: cameraBuffer.$.pos,
-          lightPos: cameraBuffer.$.playerPos,
-          surfacePos: hit.pos,
-          normal: calcNormal(hit.pos, 0),
-          surface: SurfaceColors({
-            diffuse: getColor(hit.pos).mul(0.8),
-            specular: vec3f(0.1),
-            emissive: vec3f(0),
-            shininess: f32(32),
-          }),
-        }),
-      )
-      return vec4f(dither(color, clipPos.xy), 1)
-    }
-    return vec4f(vec3f(0.2), 1)
-  })
-
-  const getColor = (hitPos: v3f): v3f => {
-    'use gpu'
-    const repeatedP = vec2f(hitPos.xy.sub(round(hitPos.xy.div(1))))
-    const d = clamp(sdBox2d(repeatedP, vec2f(0.35)) * 6, 0, 1)
-    return mix(COLOR.mul(0.5), COLOR, d)
-  }
-
-  return main
+  return baseRender
 }
