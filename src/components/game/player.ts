@@ -2,7 +2,6 @@ import { opSmoothUnion, sdSphere } from '@typegpu/sdf'
 import { addEntity, query } from 'bitecs'
 import {
   type Infer,
-  type Vec3f,
   arrayOf,
   f32,
   struct,
@@ -12,7 +11,7 @@ import {
 } from 'typegpu/data'
 import { length, max, min, normalize, sin } from 'typegpu/std'
 
-import { easeOutCubic, easeOutSine } from '../../lib/ease'
+import { easeOutCubic } from '../../lib/ease'
 import { SurfaceColors } from '../../lib/lighting'
 import {
   AABB,
@@ -30,7 +29,7 @@ import {
 export const Player = {}
 
 export const SIZE = 0.05
-export const PLAYER_HEIGHT = f32(3)
+export const PLAYER_HEIGHT = f32(2)
 
 const PlayerStruct = struct({
   position: vec3f,
