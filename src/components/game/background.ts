@@ -39,7 +39,7 @@ export function createRenderBackgroundSystem(world: World) {
       const backgrounds = query(world, [Background])
       if (backgrounds.length === 0) return 0
 
-      backgroundBuffer.write([{ pos: vec3f(0, 0, 0) }])
+      backgroundBuffer.write([{ pos: vec3f(0) }])
 
       return backgrounds.length
     },

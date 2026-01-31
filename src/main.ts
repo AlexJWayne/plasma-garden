@@ -9,8 +9,8 @@ import { positionCameraSystem } from './components/game/camera'
 import {
   applyMovementInputToPlayer,
   createPlayerEntity,
+  createRenderPlayerSystem,
 } from './components/game/player'
-import { createRenderPlayerSystem } from './components/game/player-renderer'
 import { createGridPositions, observeGrid } from './components/general/grid'
 import {
   killExpiredLifetimesSystem,
@@ -30,6 +30,7 @@ import { setKeyStateSystem } from './input'
 import { clearScreenSystem } from './lib/clear-screen'
 import { setupWebgpu } from './setup-webgpu'
 import { listenForResize } from './setup-webgpu'
+import { createRenderWorldSystem } from './systems/render-world'
 import { setupTime } from './time'
 import { updateWorldTimeSystem } from './time'
 
@@ -57,10 +58,7 @@ export function startGame(world: World) {
   createPlayerEntity(world)
   createBackgroundEntity(world)
 
-  const renderPlayerSystem = createRenderPlayerSystem(world)
-  const renderBackgroundSystem = createRenderBackgroundSystem(world)
-  const renderMushroomSystem = createRenderMushroomSystem(world)
-  const renderKelpSystem = createRenderKelpSystem(world)
+  const renderWorldSystem = createRenderWorldSystem(world)
 
   function tick(timeMs: number) {
     updateWorldTimeSystem(world, timeMs)
@@ -77,11 +75,7 @@ export function startGame(world: World) {
 
     positionCameraSystem(world)
 
-    clearScreenSystem(world)
-    renderBackgroundSystem()
-    renderPlayerSystem(world)
-    renderMushroomSystem()
-    renderKelpSystem()
+    renderWorldSystem()
 
     requestAnimationFrame(tick)
   }
