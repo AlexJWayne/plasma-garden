@@ -86,7 +86,7 @@ export function createSDFInstancesRenderer<T extends BaseData>({
   writeBuffers: () => number
 
   /** Calculate the axis-aligned bounding box for an entity instance. */
-  calcAABB: (entity: Infer<T>) => AABB
+  calcAABB: (entity: Infer<T>, elapsed: number) => AABB
 
   /** The signed distance function for the surface. Returns the distance from point to surface. */
   sdSurface: SdSurface<Infer<T>>
@@ -130,7 +130,7 @@ export function createSDFInstancesRenderer<T extends BaseData>({
     const local = cubeVertices.$[vertexIdx]
     const instance = instanceBuffer.$[instanceIdx] as Infer<T>
 
-    const aabb = calcAABB(instance)
+    const aabb = calcAABB(instance, timeBuffer.$.elapsed)
     const worldPos = select(
       aabb.min,
       aabb.max,

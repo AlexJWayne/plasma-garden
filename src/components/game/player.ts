@@ -1,8 +1,18 @@
 import { opSmoothUnion, sdSphere } from '@typegpu/sdf'
 import { addEntity, query } from 'bitecs'
-import { type Infer, arrayOf, f32, struct, vec2f, vec3f } from 'typegpu/data'
-import { length, normalize, sin } from 'typegpu/std'
+import {
+  type Infer,
+  type Vec3f,
+  arrayOf,
+  f32,
+  struct,
+  type v3f,
+  vec2f,
+  vec3f,
+} from 'typegpu/data'
+import { length, max, min, normalize, sin } from 'typegpu/std'
 
+import { easeOutCubic, easeOutSine } from '../../lib/ease'
 import { SurfaceColors } from '../../lib/lighting'
 import {
   AABB,
@@ -47,6 +57,8 @@ export function createPlayerEntity(world: World) {
   return eid
 }
 
+const WIGGLER_COUNT = 12
+
 export function applyMovementInputToPlayer(world: World) {
   const force = 200
 
@@ -86,12 +98,20 @@ export function createRenderPlayerSystem(world: World) {
       return players.length
     },
 
-    calcAABB: (player) => {
+    calcAABB: (_player, elapsed) => {
       'use gpu'
-      const halfSize = SIZE * 1.7
+
+      let minPt = vec3f(1000)
+      let maxPt = vec3f(-1000)
+      for (let i = 0; i < WIGGLER_COUNT; i++) {
+        const offset = getWiggleOffset(elapsed, i)
+        minPt = min(minPt, offset)
+        maxPt = max(maxPt, offset)
+      }
+
       return AABB({
-        min: player.position.sub(vec3f(halfSize)),
-        max: player.position.add(vec3f(halfSize)),
+        min: minPt.add(_player.position).sub(0.05),
+        max: maxPt.add(_player.position).add(0.05),
       })
     },
 
@@ -100,26 +120,20 @@ export function createRenderPlayerSystem(world: World) {
       const position = p.sub(player.position)
       const radius = SIZE / 2
 
-      let d = sdSphere(position, radius)
+      let d = sdSphere(position, radius * 1.3)
 
-      for (let i = 0; i < 12; i++) {
-        const idx = f32(i)
-
-        const time = elapsed * 0.6
-        const offset = vec3f(
-          sin((time + 10) * (0.5 + idx * 0.08)),
-          sin((time + 20) * (0.6 + idx * 0.1)),
-          sin((time + 30) * (0.7 + idx * 0.12)),
-        ).mul(0.05)
-
-        d = opSmoothUnion(d, sdSphere(position.add(offset), radius * 0.8), 0.04)
+      for (let i = 0; i < WIGGLER_COUNT; i++) {
+        const offset = getWiggleOffset(elapsed, i)
+        d = opSmoothUnion(d, sdSphere(position.add(offset), radius * 0.7), 0.04)
       }
       return d
     },
 
     calcSurfaceColors: (hitPos, player, _elapsed) => {
       'use gpu'
-      const closeness = 1 - length(hitPos.sub(player.position)) / 0.14
+      const closeness = easeOutCubic(
+        1 - length(hitPos.sub(player.position)) / 0.14,
+      )
       return SurfaceColors({
         diffuse: vec3f(0),
         specular: vec3f(0),
@@ -131,7 +145,18 @@ export function createRenderPlayerSystem(world: World) {
     maxSteps: 60,
     maxDistance: 10,
     epsilon: 0.001,
-    epsilonNormal: 0.01,
+    epsilonNormal: 1,
     debug: false,
   })
+}
+
+function getWiggleOffset(elapsed: number, idxInt: number): v3f {
+  'use gpu'
+  const idx = f32(idxInt)
+  const time = elapsed * 0.6
+  return vec3f(
+    sin((time + 10) * (0.5 + idx * 0.08)),
+    sin((time + 20) * (0.6 + idx * 0.1)),
+    sin((time + 30) * (0.7 + idx * 0.12)),
+  ).mul(0.055)
 }
