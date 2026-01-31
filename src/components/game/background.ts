@@ -75,9 +75,9 @@ export function createRenderBackgroundSystem(world: World) {
 
       return SurfaceColors({
         diffuse: diffuseColor.mul(0.8),
-        specular: vec3f(0.1),
+        specular: vec3f(0.25),
         emissive: vec3f(0),
-        shininess: f32(32),
+        shininess: f32(500),
       })
     },
 

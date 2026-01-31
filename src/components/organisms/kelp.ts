@@ -158,7 +158,7 @@ export function createRenderKelpSystem(world: World) {
             0.08 + waveD,
           ),
         ),
-        specular: hsl2rgb(vec3f(0.5, 0.5, saturate(noise))),
+        specular: hsl2rgb(vec3f(0.5, 0.5, saturate(1 - noise))),
         emissive: hsl2rgb(
           vec3f(
             0.6,
