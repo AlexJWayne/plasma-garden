@@ -1,3 +1,4 @@
+import { perlin3d } from '@typegpu/noise'
 import { opSmoothUnion, sdSphere } from '@typegpu/sdf'
 import { addEntity, query } from 'bitecs'
 import {
@@ -9,9 +10,10 @@ import {
   vec2f,
   vec3f,
 } from 'typegpu/data'
-import { length, max, min, normalize, sin } from 'typegpu/std'
+import { clamp, length, max, min, normalize, sin } from 'typegpu/std'
 
 import { easeOutCubic } from '../../lib/ease'
+import { hsl2rgb } from '../../lib/hsl'
 import { SurfaceColors } from '../../lib/lighting'
 import {
   AABB,
@@ -30,9 +32,11 @@ export const Player = {}
 
 export const SIZE = 0.05
 export const PLAYER_HEIGHT = f32(2)
+const WIGGLER_COUNT = 20
 
 const PlayerStruct = struct({
   position: vec3f,
+  velocity: vec3f,
 })
 type PlayerStruct = Infer<typeof PlayerStruct>
 
@@ -55,8 +59,6 @@ export function createPlayerEntity(world: World) {
 
   return eid
 }
-
-const WIGGLER_COUNT = 12
 
 export function applyMovementInputToPlayer(world: World) {
   const force = 200
@@ -92,25 +94,30 @@ export function createRenderPlayerSystem(world: World) {
 
       const player = players[0]
 
-      playerBuffer.write([{ position: vec3f(Position[player], PLAYER_HEIGHT) }])
+      playerBuffer.write([
+        {
+          position: vec3f(Position[player], PLAYER_HEIGHT),
+          velocity: vec3f(Velocity[player], 0),
+        },
+      ])
 
       return players.length
     },
 
-    calcAABB: (_player, elapsed) => {
+    calcAABB: (player, elapsed) => {
       'use gpu'
 
       let minPt = vec3f(1000)
       let maxPt = vec3f(-1000)
       for (let i = 0; i < WIGGLER_COUNT; i++) {
-        const offset = getWiggleOffset(elapsed, i)
+        const offset = getWiggleOffset(player, elapsed, i).mul(-1)
         minPt = min(minPt, offset)
         maxPt = max(maxPt, offset)
       }
 
       return AABB({
-        min: minPt.add(_player.position).sub(0.05),
-        max: maxPt.add(_player.position).add(0.05),
+        min: minPt.add(player.position).sub(0.03),
+        max: maxPt.add(player.position).add(0.03),
       })
     },
 
@@ -122,21 +129,35 @@ export function createRenderPlayerSystem(world: World) {
       let d = sdSphere(position, radius * 1.3)
 
       for (let i = 0; i < WIGGLER_COUNT; i++) {
-        const offset = getWiggleOffset(elapsed, i)
-        d = opSmoothUnion(d, sdSphere(position.add(offset), radius * 0.7), 0.04)
+        const offset = getWiggleOffset(player, elapsed, i)
+        d = opSmoothUnion(d, sdSphere(position.add(offset), radius * 0.3), 0.04)
       }
       return d
     },
 
-    calcSurfaceColors: (hitPos, player, _elapsed) => {
+    calcSurfaceColors: (hitPos, player, elapsed) => {
       'use gpu'
-      const closeness = easeOutCubic(
-        1 - length(hitPos.sub(player.position)) / 0.14,
+
+      const noise =
+        perlin3d.sample(
+          hitPos
+            .sub(player.position)
+            .add(elapsed * 0.0)
+            .mul(70),
+        ) *
+          0.1 +
+        0.02
+
+      const value = clamp(
+        easeOutCubic(1 - length(hitPos.sub(player.position)) / 0.2) + noise,
+        0.8,
+        1,
       )
+
       return SurfaceColors({
         diffuse: vec3f(0),
         specular: vec3f(0),
-        emissive: vec3f(closeness),
+        emissive: vec3f(hsl2rgb(vec3f(0.6, 0.8, value))),
         shininess: f32(0),
       })
     },
@@ -149,13 +170,22 @@ export function createRenderPlayerSystem(world: World) {
   })
 }
 
-function getWiggleOffset(elapsed: number, idxInt: number): v3f {
+function getWiggleOffset(
+  player: PlayerStruct,
+  elapsed: number,
+  idxInt: number,
+): v3f {
   'use gpu'
   const idx = f32(idxInt)
   const time = elapsed * 0.6
-  return vec3f(
+
+  const wiggleOffset = vec3f(
     sin((time + 10) * (0.5 + idx * 0.08)),
     sin((time + 20) * (0.6 + idx * 0.1)),
     sin((time + 30) * (0.7 + idx * 0.12)),
-  ).mul(0.055)
+  ).mul(0.04)
+
+  const velocityOffset = player.velocity.mul((0.1 * idx) / f32(WIGGLER_COUNT))
+
+  return wiggleOffset.add(velocityOffset)
 }
