@@ -1,8 +1,7 @@
-import { perlin2d } from '@typegpu/noise'
 import { opSmoothUnion, sdSphere } from '@typegpu/sdf'
 import { addEntity, query } from 'bitecs'
 import { type Infer, arrayOf, f32, struct, vec2f, vec3f } from 'typegpu/data'
-import { length, normalize } from 'typegpu/std'
+import { length, normalize, sin } from 'typegpu/std'
 
 import { SurfaceColors } from '../../lib/lighting'
 import {
@@ -89,7 +88,7 @@ export function createRenderPlayerSystem(world: World) {
 
     calcAABB: (player) => {
       'use gpu'
-      const halfSize = SIZE * 5
+      const halfSize = SIZE * 1.7
       return AABB({
         min: player.position.sub(vec3f(halfSize)),
         max: player.position.add(vec3f(halfSize)),
@@ -102,31 +101,37 @@ export function createRenderPlayerSystem(world: World) {
       const radius = SIZE / 2
 
       let d = sdSphere(position, radius)
-      d = opSmoothUnion(
-        d,
-        sdSphere(
-          position.add(vec3f(radius * 3 * perlin2d.sample(vec2f(elapsed, 0)))),
-          radius,
-        ),
-        radius,
-      )
+
+      for (let i = 0; i < 12; i++) {
+        const idx = f32(i)
+
+        const time = elapsed * 0.6
+        const offset = vec3f(
+          sin((time + 10) * (0.5 + idx * 0.08)),
+          sin((time + 20) * (0.6 + idx * 0.1)),
+          sin((time + 30) * (0.7 + idx * 0.12)),
+        ).mul(0.05)
+
+        d = opSmoothUnion(d, sdSphere(position.add(offset), radius * 0.8), 0.04)
+      }
       return d
     },
 
-    calcSurfaceColors: (_hitPos, _player, _elapsed) => {
+    calcSurfaceColors: (hitPos, player, _elapsed) => {
       'use gpu'
+      const closeness = 1 - length(hitPos.sub(player.position)) / 0.14
       return SurfaceColors({
         diffuse: vec3f(0),
         specular: vec3f(0),
-        emissive: vec3f(1),
-        shininess: f32(64),
+        emissive: vec3f(closeness),
+        shininess: f32(0),
       })
     },
 
     maxSteps: 60,
-    maxDistance: 20,
-    epsilon: 0.0001,
+    maxDistance: 10,
+    epsilon: 0.001,
     epsilonNormal: 0.01,
-    debug: true,
+    debug: false,
   })
 }
