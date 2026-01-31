@@ -24,7 +24,6 @@ import type { TimeStruct } from '../time'
 import { cubeVertices } from './geometry'
 import { Lighting, SurfaceColors, calcSurfaceLighting } from './lighting'
 import { createPipelinePerformanceCallback } from './pipeline-perf'
-import { type SdSurface } from './raymarching'
 import {
   blending,
   createColorAttachment,
@@ -33,6 +32,8 @@ import {
 } from './web-gpu'
 
 export function createSdfSurfaceShaders() {}
+
+export type SdSurface<T, R = number> = (p: v3f, arg: T, elapsed: number) => R
 
 export const AABB = struct({ min: vec3f, max: vec3f })
 export type AABB = Infer<typeof AABB>
@@ -154,7 +155,7 @@ export function createSDFInstancesRenderer<T extends BaseData>({
 
     for (let i = 0; i < maxSteps; i++) {
       const point = cameraPos.add(rayDirection.mul(totalDistance))
-      const distance = sdSurface(point, arg)
+      const distance = sdSurface(point, arg, timeBuffer.$.elapsed)
 
       if (distance < epsilon) return RayHit({ isHit: true, pos: point })
       if (distance > maxDistance) break
@@ -170,16 +171,38 @@ export function createSDFInstancesRenderer<T extends BaseData>({
     const k = vec2f(1, -1)
     return normalize(
       k.xyy
-        .mul(sdSurface(p.add(k.xyy.mul(epsilonNormal)), instance))
+        .mul(
+          sdSurface(
+            p.add(k.xyy.mul(epsilonNormal)),
+            instance,
+            timeBuffer.$.elapsed,
+          ),
+        )
         .add(
           k.yyx
-            .mul(sdSurface(p.add(k.yyx.mul(epsilonNormal)), instance))
+            .mul(
+              sdSurface(
+                p.add(k.yyx.mul(epsilonNormal)),
+                instance,
+                timeBuffer.$.elapsed,
+              ),
+            )
             .add(
               k.yxy
-                .mul(sdSurface(p.add(k.yxy.mul(epsilonNormal)), instance))
+                .mul(
+                  sdSurface(
+                    p.add(k.yxy.mul(epsilonNormal)),
+                    instance,
+                    timeBuffer.$.elapsed,
+                  ),
+                )
                 .add(
                   k.xxx.mul(
-                    sdSurface(p.add(k.xxx.mul(epsilonNormal)), instance),
+                    sdSurface(
+                      p.add(k.xxx.mul(epsilonNormal)),
+                      instance,
+                      timeBuffer.$.elapsed,
+                    ),
                   ),
                 ),
             ),

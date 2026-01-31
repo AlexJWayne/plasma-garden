@@ -52,7 +52,7 @@ export function createRenderBackgroundSystem(world: World) {
       })
     },
 
-    sdSurface: (p, _bg) => {
+    sdSurface: (p, _bg, _elapsed) => {
       'use gpu'
 
       const repeatedP = vec3f(p.xy.sub(round(p.xy.div(1))), p.z)

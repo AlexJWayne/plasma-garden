@@ -1,15 +1,11 @@
 import { createWorld } from 'bitecs'
 
-import {
-  createBackgroundEntity,
-  createRenderBackgroundSystem,
-} from './components/game/background'
+import { createBackgroundEntity } from './components/game/background'
 import { setupCamera } from './components/game/camera'
 import { positionCameraSystem } from './components/game/camera'
 import {
   applyMovementInputToPlayer,
   createPlayerEntity,
-  createRenderPlayerSystem,
 } from './components/game/player'
 import { createGridPositions, observeGrid } from './components/general/grid'
 import {
@@ -17,17 +13,10 @@ import {
   observeLifetimes,
 } from './components/general/lifetime'
 import { physicsSystem } from './components/general/physics'
-import {
-  createRenderKelpSystem,
-  spawnKelpSystem,
-} from './components/organisms/kelp'
-import {
-  createRenderMushroomSystem,
-  spawnMushroomsSystem,
-} from './components/organisms/mushroom'
+import { spawnKelpSystem } from './components/organisms/kelp'
+import { spawnMushroomsSystem } from './components/organisms/mushroom'
 import { setupInput } from './input'
 import { setKeyStateSystem } from './input'
-import { clearScreenSystem } from './lib/clear-screen'
 import { setupWebgpu } from './setup-webgpu'
 import { listenForResize } from './setup-webgpu'
 import { createRenderWorldSystem } from './systems/render-world'

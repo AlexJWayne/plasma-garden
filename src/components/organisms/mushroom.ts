@@ -115,7 +115,7 @@ export function createRenderMushroomSystem(world: World) {
       })
     },
 
-    sdSurface: (p, mushroom) => {
+    sdSurface: (p, mushroom, _elapsed) => {
       'use gpu'
       const localP = p.sub(mushroom.pos)
 

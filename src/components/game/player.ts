@@ -1,4 +1,5 @@
-import { sdSphere } from '@typegpu/sdf'
+import { perlin2d } from '@typegpu/noise'
+import { opSmoothUnion, sdSphere } from '@typegpu/sdf'
 import { addEntity, query } from 'bitecs'
 import { type Infer, arrayOf, f32, struct, vec2f, vec3f } from 'typegpu/data'
 import { length, normalize } from 'typegpu/std'
@@ -88,23 +89,35 @@ export function createRenderPlayerSystem(world: World) {
 
     calcAABB: (player) => {
       'use gpu'
-      const halfSize = SIZE / 2
+      const halfSize = SIZE * 5
       return AABB({
         min: player.position.sub(vec3f(halfSize)),
         max: player.position.add(vec3f(halfSize)),
       })
     },
 
-    sdSurface: (p, player) => {
+    sdSurface: (p, player, elapsed) => {
       'use gpu'
-      return sdSphere(p.sub(player.position), SIZE / 2)
+      const position = p.sub(player.position)
+      const radius = SIZE / 2
+
+      let d = sdSphere(position, radius)
+      d = opSmoothUnion(
+        d,
+        sdSphere(
+          position.add(vec3f(radius * 3 * perlin2d.sample(vec2f(elapsed, 0)))),
+          radius,
+        ),
+        radius,
+      )
+      return d
     },
 
     calcSurfaceColors: (_hitPos, _player, _elapsed) => {
       'use gpu'
       return SurfaceColors({
-        diffuse: vec3f(0.9, 0.9, 0.9),
-        specular: vec3f(0.5),
+        diffuse: vec3f(0),
+        specular: vec3f(0),
         emissive: vec3f(1),
         shininess: f32(64),
       })
@@ -114,6 +127,6 @@ export function createRenderPlayerSystem(world: World) {
     maxDistance: 20,
     epsilon: 0.0001,
     epsilonNormal: 0.01,
-    debug: false,
+    debug: true,
   })
 }

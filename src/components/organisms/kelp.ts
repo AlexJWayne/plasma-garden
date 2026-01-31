@@ -106,7 +106,7 @@ export function createRenderKelpSystem(world: World) {
       })
     },
 
-    sdSurface: (p, kelp): number => {
+    sdSurface: (p, kelp, _elapsed): number => {
       'use gpu'
 
       const twistedP = calcTwistedP(p, kelp)
