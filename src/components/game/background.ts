@@ -39,11 +39,7 @@ export function createRenderBackgroundSystem(world: World) {
       const backgrounds = query(world, [Background])
       if (backgrounds.length === 0) return 0
 
-      backgroundBuffer.write([
-        {
-          pos: vec3f(0, 0, 0),
-        },
-      ])
+      backgroundBuffer.write([{ pos: vec3f(0, 0, 0) }])
 
       return backgrounds.length
     },
@@ -56,7 +52,7 @@ export function createRenderBackgroundSystem(world: World) {
       })
     },
 
-    sdSurface: (p, _bg): number => {
+    sdSurface: (p, _bg) => {
       'use gpu'
 
       const repeatedP = vec3f(p.xy.sub(round(p.xy.div(1))), p.z)

@@ -27,7 +27,7 @@ import {
 } from './components/organisms/mushroom'
 import { setupInput } from './input'
 import { setKeyStateSystem } from './input'
-import { createClearScreenSystem } from './lib/clear-screen'
+import { clearScreenSystem } from './lib/clear-screen'
 import { setupWebgpu } from './setup-webgpu'
 import { listenForResize } from './setup-webgpu'
 import { setupTime } from './time'
@@ -57,7 +57,6 @@ export function startGame(world: World) {
   createPlayerEntity(world)
   createBackgroundEntity(world)
 
-  const clearScreen = createClearScreenSystem(world)
   const renderPlayerSystem = createRenderPlayerSystem(world)
   const renderBackgroundSystem = createRenderBackgroundSystem(world)
   const renderMushroomSystem = createRenderMushroomSystem(world)
@@ -77,7 +76,8 @@ export function startGame(world: World) {
     setKeyStateSystem()
 
     positionCameraSystem(world)
-    clearScreen()
+
+    clearScreenSystem(world)
     renderBackgroundSystem()
     renderPlayerSystem(world)
     renderMushroomSystem()
