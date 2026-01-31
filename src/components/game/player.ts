@@ -107,8 +107,8 @@ export function createRenderPlayerSystem(world: World) {
     calcAABB: (player, elapsed) => {
       'use gpu'
 
-      let minPt = vec3f(1000)
-      let maxPt = vec3f(-1000)
+      let minPt = vec3f(-0.02)
+      let maxPt = vec3f(0.02)
       for (let i = 0; i < WIGGLER_COUNT; i++) {
         const offset = getWiggleOffset(player, elapsed, i).mul(-1)
         minPt = min(minPt, offset)
