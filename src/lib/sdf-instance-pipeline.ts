@@ -1,4 +1,4 @@
-import tgpu, { type TgpuBufferReadonly, type TgpuBufferUniform } from 'typegpu'
+import tgpu, { type TgpuBufferReadonly } from 'typegpu'
 import {
   type BaseData,
   type Infer,
@@ -16,10 +16,8 @@ import {
 } from 'typegpu/data'
 import { length, normalize, select } from 'typegpu/std'
 
-import type { CameraStruct } from '../components/game/camera'
 import type { World } from '../main'
 import { presentationFormat, sampleCount } from '../setup-webgpu'
-import type { TimeStruct } from '../time'
 
 import { cubeVertices } from './geometry'
 import { Lighting, SurfaceColors, calcSurfaceLighting } from './lighting'
@@ -47,9 +45,7 @@ export function createSDFInstancesRenderer<T extends BaseData>({
   name,
   world,
 
-  cameraBuffer,
   instanceBuffer,
-  timeBuffer,
 
   writeBuffers,
   calcAABB,
@@ -72,12 +68,6 @@ export function createSDFInstancesRenderer<T extends BaseData>({
 
   /** Name of the pipeline for debugging and performance tracking. */
   name: string
-
-  /** Time buffer for time-based animations in shaders. */
-  timeBuffer: TgpuBufferUniform<typeof TimeStruct>
-
-  /** The global camera buffer. */
-  cameraBuffer: TgpuBufferUniform<typeof CameraStruct>
 
   /** The instance data. Should be an array of structs, one item per instance. */
   instanceBuffer: TgpuBufferReadonly<WgslArray<T>>
@@ -116,6 +106,9 @@ export function createSDFInstancesRenderer<T extends BaseData>({
   /** Enable debug visualization. This shows all AABBs for all rendered instances. */
   debug?: boolean
 }) {
+  const cameraBuffer = world.camera.buffer.as('uniform')
+  const timeBuffer = world.time.buffer.as('uniform')
+
   const vertexProgram = tgpu['~unstable'].vertexFn({
     in: {
       instanceIdx: builtin.instanceIndex,

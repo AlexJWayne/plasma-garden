@@ -75,8 +75,6 @@ export function createRenderMushroomSystem(world: World) {
     name: 'Mushroom',
     world,
 
-    timeBuffer: world.time.buffer.as('uniform'),
-    cameraBuffer: world.camera.buffer.as('uniform'),
     instanceBuffer: mushroomsBuffer.as('readonly'),
 
     writeBuffers: () => {

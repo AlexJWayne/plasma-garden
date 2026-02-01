@@ -73,9 +73,7 @@ export function createRenderKelpSystem(world: World) {
     name: 'Kelp',
     world,
 
-    cameraBuffer: world.camera.buffer.as('uniform'),
     instanceBuffer: kelpsBuffer.as('readonly'),
-    timeBuffer: world.time.buffer.as('uniform'),
 
     writeBuffers: () => {
       const kelps = query(world, [Kelp, GridPosition, Lifetime])

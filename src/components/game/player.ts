@@ -84,9 +84,7 @@ export function createRenderPlayerSystem(world: World) {
     name: 'Player',
     world,
 
-    cameraBuffer: world.camera.buffer.as('uniform'),
     instanceBuffer: playerBuffer.as('readonly'),
-    timeBuffer: world.time.buffer.as('uniform'),
 
     writeBuffers: () => {
       const players = query(world, [Player, Position])

@@ -31,9 +31,7 @@ export function createRenderBackgroundSystem(world: World) {
     name: 'Background',
     world,
 
-    cameraBuffer: world.camera.buffer.as('uniform'),
     instanceBuffer: backgroundBuffer.as('readonly'),
-    timeBuffer: world.time.buffer.as('uniform'),
 
     writeBuffers: () => {
       const backgrounds = query(world, [Background])
