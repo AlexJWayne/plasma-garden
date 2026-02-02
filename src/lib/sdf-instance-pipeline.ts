@@ -144,15 +144,12 @@ export function createSDFInstancesRenderer(world: World, name: string) {
                 fragmentProgram,
               })
 
-              return function render() {
-                const count = writeBuffers(instanceBuffer)
-                if (count === 0) return
-
-                pipeline
-                  .withColorAttachment({ color: createColorAttachment(world) })
-                  .withDepthStencilAttachment(createDepthAttachment(world))
-                  .draw(cubeVertices.$.length, count)
-              }
+              return createRenderFunction({
+                world,
+                instanceBuffer,
+                pipeline,
+                writeBuffers,
+              })
             },
           }
         },
@@ -410,4 +407,26 @@ function createPipeline<T extends BaseData>({
     .withMultisample({ count: sampleCount })
     .createPipeline()
     .withPerformanceCallback(createPipelinePerformanceCallback(name))
+}
+
+function createRenderFunction<T extends BaseData>({
+  world,
+  instanceBuffer,
+  pipeline,
+  writeBuffers,
+}: {
+  world: World
+  instanceBuffer: TgpuBuffer<WgslArray<T>>
+  pipeline: ReturnType<typeof createPipeline<T>>
+  writeBuffers: (buffer: TgpuBuffer<WgslArray<T>>) => number
+}) {
+  return function render() {
+    const count = writeBuffers(instanceBuffer)
+    if (count === 0) return
+
+    pipeline
+      .withColorAttachment({ color: createColorAttachment(world) })
+      .withDepthStencilAttachment(createDepthAttachment(world))
+      .draw(cubeVertices.$.length, count)
+  }
 }
