@@ -166,55 +166,14 @@ export function createSDFInstancesRenderer(world: World, name: string) {
                 epsilonNormal,
               })
 
-              const fragmentProgram = tgpu['~unstable'].fragmentFn({
-                in: {
-                  worldPos: vec3f,
-                  instanceIdx: interpolate('flat', u32),
-                },
-                out: {
-                  color: vec4f,
-                  depth: builtin.fragDepth,
-                },
-              })(({ worldPos, instanceIdx }) => {
-                'use gpu'
-
-                const instance = instanceBufferReadonly.$[
-                  instanceIdx
-                ] as Infer<T>
-                const rayHit = raymarch(cameraBuffer.$.pos, worldPos, instance)
-
-                if (!rayHit.isHit) {
-                  if (debug) return DEBUG_MISS
-                  return { color: vec4f(0), depth: 1 }
-                }
-
-                const normal = postProcessNormal(
-                  calcNormal(rayHit.pos, instance),
-                  rayHit.pos,
-                  instance,
-                )
-
-                const color = calcSurfaceLighting(
-                  Lighting({
-                    cameraPos: cameraBuffer.$.pos,
-                    lightPos: cameraBuffer.$.playerPos,
-                    surfacePos: rayHit.pos,
-                    normal,
-                    surface: calcSurfaceColors(
-                      rayHit.pos,
-                      instance,
-                      timeBuffer.$.elapsed,
-                    ),
-                  }),
-                )
-
-                const hitClipPos = cameraBuffer.$.viewMatrix.mul(
-                  vec4f(rayHit.pos, 1),
-                )
-                return {
-                  color: vec4f(color, 1),
-                  depth: hitClipPos.z / hitClipPos.w,
-                }
+              const fragmentProgram = createFragmentProgram({
+                world,
+                instanceBufferReadonly,
+                raymarch,
+                calcNormal,
+                postProcessNormal,
+                calcSurfaceColors,
+                debug,
               })
 
               const pipeline = world.root['~unstable']
@@ -339,4 +298,76 @@ function createCalcNormal<T extends BaseData>({
         ),
     )
   }
+}
+
+function createFragmentProgram<T extends BaseData>({
+  world,
+  instanceBufferReadonly,
+  raymarch,
+  calcNormal,
+  postProcessNormal,
+  calcSurfaceColors,
+  debug,
+}: {
+  world: World
+  instanceBufferReadonly: ReturnType<TgpuBuffer<WgslArray<T>>['as']>
+  raymarch: (cameraPos: v3f, worldPos: v3f, arg: Infer<T>) => RayHit
+  calcNormal: (p: v3f, instance: Infer<T>) => v3f
+  postProcessNormal: (normal: v3f, p: v3f, entity: Infer<T>) => v3f
+  calcSurfaceColors: (
+    p: v3f,
+    entity: Infer<T>,
+    elapsed: number,
+  ) => SurfaceColors
+  debug: boolean
+}) {
+  const cameraBuffer = world.camera.buffer.as('uniform')
+  const timeBuffer = world.time.buffer.as('uniform')
+
+  return tgpu['~unstable'].fragmentFn({
+    in: {
+      worldPos: vec3f,
+      instanceIdx: interpolate('flat', u32),
+    },
+    out: {
+      color: vec4f,
+      depth: builtin.fragDepth,
+    },
+  })(({ worldPos, instanceIdx }) => {
+    'use gpu'
+
+    const instance = instanceBufferReadonly.$[instanceIdx] as Infer<T>
+    const rayHit = raymarch(cameraBuffer.$.pos, worldPos, instance)
+
+    if (!rayHit.isHit) {
+      if (debug) return DEBUG_MISS
+      return { color: vec4f(0), depth: 1 }
+    }
+
+    const normal = postProcessNormal(
+      calcNormal(rayHit.pos, instance),
+      rayHit.pos,
+      instance,
+    )
+
+    const color = calcSurfaceLighting(
+      Lighting({
+        cameraPos: cameraBuffer.$.pos,
+        lightPos: cameraBuffer.$.playerPos,
+        surfacePos: rayHit.pos,
+        normal,
+        surface: calcSurfaceColors(
+          rayHit.pos,
+          instance,
+          timeBuffer.$.elapsed,
+        ),
+      }),
+    )
+
+    const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(rayHit.pos, 1))
+    return {
+      color: vec4f(color, 1),
+      depth: hitClipPos.z / hitClipPos.w,
+    }
+  })
 }
