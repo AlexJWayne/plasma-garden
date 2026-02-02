@@ -67,14 +67,8 @@ export function spawnMushroomsSystem(world: World) {
 }
 
 export function createRenderMushroomSystem(world: World) {
-  return createSDFInstancesRenderer({
-    name: 'Mushroom',
-    world,
-
-    instanceStruct: MushroomStruct,
-    instanceCapacity: 1000,
-
-    writeBuffers: (buffer) => {
+  return createSDFInstancesRenderer(world, 'Mushroom')
+    .withBuffer(MushroomStruct, 1000, (buffer) => {
       const mushrooms = query(world, [Mushroom, GridPosition])
       if (mushrooms.length === 0) return 0
 
@@ -96,126 +90,126 @@ export function createRenderMushroomSystem(world: World) {
       )
 
       return mushrooms.length
-    },
+    })
+    .withRaymarching({
+      calcAABB: (mushroom) => {
+        'use gpu'
+        const growth = easeInSine(mushroom.completion)
+        const capRadius = mushroom.capRadius * growth
+        const height = mushroom.height * growth
 
-    calcAABB: (mushroom) => {
-      'use gpu'
-      const growth = easeInSine(mushroom.completion)
-      const capRadius = mushroom.capRadius * growth
-      const height = mushroom.height * growth
+        return AABB({
+          min: mushroom.pos.sub(vec3f(capRadius, capRadius, 0)),
+          max: mushroom.pos.add(vec3f(capRadius, capRadius, height)),
+        })
+      },
 
-      return AABB({
-        min: mushroom.pos.sub(vec3f(capRadius, capRadius, 0)),
-        max: mushroom.pos.add(vec3f(capRadius, capRadius, height)),
-      })
-    },
+      sdSurface: (p, mushroom, _elapsed) => {
+        'use gpu'
+        const localP = p.sub(mushroom.pos)
 
-    sdSurface: (p, mushroom, _elapsed) => {
-      'use gpu'
-      const localP = p.sub(mushroom.pos)
+        const growth = easeInSine(mushroom.completion)
+        const stemRadius = mushroom.stemRadius * growth
+        const capRadius = mushroom.capRadius * growth
+        const height = mushroom.height * growth
 
-      const growth = easeInSine(mushroom.completion)
-      const stemRadius = mushroom.stemRadius * growth
-      const capRadius = mushroom.capRadius * growth
-      const height = mushroom.height * growth
-
-      const stem = opSmoothUnion(
-        sdCapsule(
-          localP,
-          vec3f(0, 0, stemRadius),
-          vec3f(0, 0, height - stemRadius),
-          stemRadius,
-        ),
-        sdCone(
-          rotateX(localP.sub(vec3f(0, 0, height - 0.2)), -Math.PI / 2),
+        const stem = opSmoothUnion(
+          sdCapsule(
+            localP,
+            vec3f(0, 0, stemRadius),
+            vec3f(0, 0, height - stemRadius),
+            stemRadius,
+          ),
+          sdCone(
+            rotateX(localP.sub(vec3f(0, 0, height - 0.2)), -Math.PI / 2),
+            0.15,
+            height - 0.2,
+          ),
           0.15,
-          height - 0.2,
-        ),
-        0.15,
-      )
+        )
 
-      const capCenter = localP.sub(vec3f(0, 0, height - capRadius))
-      let cap = sdSphere(capCenter, capRadius)
-      cap = opSmoothDifference(
-        cap,
-        sdBox3d(localP, vec3f(1, 1, height - capRadius * 0.4)),
-        0.05,
-      )
+        const capCenter = localP.sub(vec3f(0, 0, height - capRadius))
+        let cap = sdSphere(capCenter, capRadius)
+        cap = opSmoothDifference(
+          cap,
+          sdBox3d(localP, vec3f(1, 1, height - capRadius * 0.4)),
+          0.05,
+        )
 
-      const expiryGrowth = clamp(
-        remap(mushroom.completion, 0.65, f32(1), f32(0), f32(1)),
-        f32(0),
-        f32(1),
-      )
-      const expiry = sdCapsule(
-        p,
-        mushroom.pos.sub(vec3f(0, 0, 100)),
-        mushroom.pos.add(
-          vec3f(0, 0, -capRadius + (capRadius + height * 1.25) * expiryGrowth),
-        ),
-        capRadius * expiryGrowth,
-      )
+        const expiryGrowth = clamp(
+          remap(mushroom.completion, 0.65, f32(1), f32(0), f32(1)),
+          f32(0),
+          f32(1),
+        )
+        const expiry = sdCapsule(
+          p,
+          mushroom.pos.sub(vec3f(0, 0, 100)),
+          mushroom.pos.add(
+            vec3f(0, 0, -capRadius + (capRadius + height * 1.25) * expiryGrowth),
+          ),
+          capRadius * expiryGrowth,
+        )
 
-      return opSmoothDifference(opUnion(stem, cap), expiry, 0.1)
-    },
+        return opSmoothDifference(opUnion(stem, cap), expiry, 0.1)
+      },
 
-    postProcessNormal: (normal, p, mushroom) => {
-      'use gpu'
-      const angle = atan2(p.y - mushroom.pos.y, p.x - mushroom.pos.x)
-      return vec3f(
-        rotate2d(normal.xy, sin(angle * mushroom.lobes) * 0.3),
-        normal.z,
-      )
-    },
+      postProcessNormal: (normal, p, mushroom) => {
+        'use gpu'
+        const angle = atan2(p.y - mushroom.pos.y, p.x - mushroom.pos.x)
+        return vec3f(
+          rotate2d(normal.xy, sin(angle * mushroom.lobes) * 0.3),
+          normal.z,
+        )
+      },
 
-    calcSurfaceColors: (hitPos, mushroom, elapsed) => {
-      'use gpu'
+      calcSurfaceColors: (hitPos, mushroom, elapsed) => {
+        'use gpu'
 
-      const baseHueShift =
-        (fract(mushroom.pos.x * 1.1577 + mushroom.pos.y * 3.7193) * 2 - 1) * 0.1
-      const baseColor = hsl2rgb(vec3f(0.66 + baseHueShift, 0.4, 0.4))
+        const baseHueShift =
+          (fract(mushroom.pos.x * 1.1577 + mushroom.pos.y * 3.7193) * 2 - 1) * 0.1
+        const baseColor = hsl2rgb(vec3f(0.66 + baseHueShift, 0.4, 0.4))
 
-      const angle = atan2(hitPos.y - mushroom.pos.y, hitPos.x - mushroom.pos.x)
+        const angle = atan2(hitPos.y - mushroom.pos.y, hitPos.x - mushroom.pos.x)
 
-      const glowZFactor = easeInCubic(
-        hitPos.z / (mushroom.height * mushroom.completion),
-      )
-      const glowZ = glowZFactor * (mushroom.height * mushroom.completion)
+        const glowZFactor = easeInCubic(
+          hitPos.z / (mushroom.height * mushroom.completion),
+        )
+        const glowZ = glowZFactor * (mushroom.height * mushroom.completion)
 
-      let glowValue =
-        (glowZ + sin(angle * mushroom.lobes) * 0.01) * 2 +
-        elapsed * 0.1 +
-        mushroom.pos.x +
-        mushroom.pos.y
-      glowValue = abs(fract(glowValue) - 0.5) * 2
+        let glowValue =
+          (glowZ + sin(angle * mushroom.lobes) * 0.01) * 2 +
+          elapsed * 0.1 +
+          mushroom.pos.x +
+          mushroom.pos.y
+        glowValue = abs(fract(glowValue) - 0.5) * 2
 
-      let glowWhiteValue = smoothstep(0.95, 1, glowValue)
-      glowValue = smoothstep(0.8, 1, glowValue)
+        let glowWhiteValue = smoothstep(0.95, 1, glowValue)
+        glowValue = smoothstep(0.8, 1, glowValue)
 
-      const glowHue = fract(
-        hitPos.z +
-          mushroom.pos.x * 3.77 +
-          mushroom.pos.y * 5.37 +
-          elapsed * 0.1,
-      )
-      const glowColor = hsl2rgb(vec3f(glowHue, 1, 0.6))
-        .mul(glowValue)
-        .add(vec3f(glowWhiteValue))
-        .mul(easeInCubic(hitPos.z / mushroom.height))
+        const glowHue = fract(
+          hitPos.z +
+            mushroom.pos.x * 3.77 +
+            mushroom.pos.y * 5.37 +
+            elapsed * 0.1,
+        )
+        const glowColor = hsl2rgb(vec3f(glowHue, 1, 0.6))
+          .mul(glowValue)
+          .add(vec3f(glowWhiteValue))
+          .mul(easeInCubic(hitPos.z / mushroom.height))
 
-      return SurfaceColors({
-        diffuse: baseColor,
-        specular: vec3f(1, 0.5, 0),
-        emissive: glowColor,
-        shininess: f32(64),
-      })
-    },
+        return SurfaceColors({
+          diffuse: baseColor,
+          specular: vec3f(1, 0.5, 0),
+          emissive: glowColor,
+          shininess: f32(64),
+        })
+      },
 
-    maxSteps: 50,
-    maxDistance: 100,
-    epsilon: 0.001,
-    epsilonNormal: 0.01,
-
-    debug: false,
-  })
+      maxSteps: 50,
+      maxDistance: 100,
+      epsilon: 0.001,
+      epsilonNormal: 0.01,
+      debug: false,
+    })
+    .createRenderer()
 }

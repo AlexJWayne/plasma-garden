@@ -57,14 +57,8 @@ export function spawnKelpSystem(world: World): void {
 }
 
 export function createRenderKelpSystem(world: World) {
-  return createSDFInstancesRenderer({
-    name: 'Kelp',
-    world,
-
-    instanceStruct: KelpStruct,
-    instanceCapacity: 400,
-
-    writeBuffers: (buffer) => {
+  return createSDFInstancesRenderer(world, 'Kelp')
+    .withBuffer(KelpStruct, 400, (buffer) => {
       const kelps = query(world, [Kelp, GridPosition, Lifetime])
       if (kelps.length === 0) return 0
 
@@ -82,88 +76,88 @@ export function createRenderKelpSystem(world: World) {
       )
 
       return kelps.length
-    },
+    })
+    .withRaymarching({
+      calcAABB: ({ entityPos, height, growth }) => {
+        'use gpu'
+        const horizontalExtent = (0.9 * (1 - growth)) / 2
+        return AABB({
+          min: entityPos.add(vec3f(vec2f(-horizontalExtent), 0)),
+          max: entityPos.add(vec3f(vec2f(horizontalExtent), height * growth)),
+        })
+      },
 
-    calcAABB: ({ entityPos, height, growth }) => {
-      'use gpu'
-      const horizontalExtent = (0.9 * (1 - growth)) / 2
-      return AABB({
-        min: entityPos.add(vec3f(vec2f(-horizontalExtent), 0)),
-        max: entityPos.add(vec3f(vec2f(horizontalExtent), height * growth)),
-      })
-    },
+      sdSurface: (p, kelp, _elapsed): number => {
+        'use gpu'
 
-    sdSurface: (p, kelp, _elapsed): number => {
-      'use gpu'
+        const twistedP = calcTwistedP(p, kelp)
+        const narrowness = 1 - kelp.growth
+        const height = kelp.height * kelp.growth
 
-      const twistedP = calcTwistedP(p, kelp)
-      const narrowness = 1 - kelp.growth
-      const height = kelp.height * kelp.growth
+        const linkThickness = 0.03
+        const radius = narrowness * 0.4 - linkThickness
 
-      const linkThickness = 0.03
-      const radius = narrowness * 0.4 - linkThickness
+        const membrane2d =
+          sdLine(
+            twistedP.xz,
+            vec2f(0, -radius),
+            vec2f(0, height - radius - linkThickness),
+          ) - radius
+        const membrane = opExtrudeY(twistedP, membrane2d, 0.01)
 
-      const membrane2d =
-        sdLine(
-          twistedP.xz,
-          vec2f(0, -radius),
-          vec2f(0, height - radius - linkThickness),
-        ) - radius
-      const membrane = opExtrudeY(twistedP, membrane2d, 0.01)
+        const membraneCenter = height * 0.5 - radius - linkThickness
+        const centeredP = twistedP.sub(vec3f(0, 0, membraneCenter))
+        const offsetP = vec3f(centeredP.xzy)
+        const border = sdLink(offsetP, height * 0.5, radius, linkThickness)
 
-      const membraneCenter = height * 0.5 - radius - linkThickness
-      const centeredP = twistedP.sub(vec3f(0, 0, membraneCenter))
-      const offsetP = vec3f(centeredP.xzy)
-      const border = sdLink(offsetP, height * 0.5, radius, linkThickness)
+        return opSmoothUnion(membrane, border, 0.07)
+      },
 
-      return opSmoothUnion(membrane, border, 0.07)
-    },
+      calcSurfaceColors: (worldPos, kelp, _elapsed) => {
+        'use gpu'
 
-    calcSurfaceColors: (worldPos, kelp, _elapsed) => {
-      'use gpu'
+        const twistedP = calcTwistedP(worldPos, kelp)
+        const p = twistedP.xz
 
-      const twistedP = calcTwistedP(worldPos, kelp)
-      const p = twistedP.xz
+        const amplitude = sin((p.y - kelp.growth * 2) * 20) * 0.025
+        const waveD = abs(p.x - amplitude)
+        const waveGlow = smoothstep(0.1, 0, waveD) ** 8
 
-      const amplitude = sin((p.y - kelp.growth * 2) * 20) * 0.025
-      const waveD = abs(p.x - amplitude)
-      const waveGlow = smoothstep(0.1, 0, waveD) ** 8
-
-      const noise = perlin3d.sample(
-        vec3f(
-          p.x, //
-          p.y - kelp.growth * 5,
-          kelp.growth * 0.25,
-        ).mul(12),
-      )
-
-      return SurfaceColors({
-        diffuse: hsl2rgb(
+        const noise = perlin3d.sample(
           vec3f(
-            0.33, //
-            0.4 + waveD * 0.5,
-            0.08 + waveD,
+            p.x, //
+            p.y - kelp.growth * 5,
+            kelp.growth * 0.25,
+          ).mul(12),
+        )
+
+        return SurfaceColors({
+          diffuse: hsl2rgb(
+            vec3f(
+              0.33, //
+              0.4 + waveD * 0.5,
+              0.08 + waveD,
+            ),
           ),
-        ),
-        specular: hsl2rgb(vec3f(0.5, 0.5, saturate(1 - noise))),
-        emissive: hsl2rgb(
-          vec3f(
-            0.6,
-            0.7,
-            saturate(waveGlow + smoothstep(0.0, 0.7, noise)) ** 4,
-          ).mul(0.8),
-        ),
-        shininess: f32(32),
-      })
-    },
+          specular: hsl2rgb(vec3f(0.5, 0.5, saturate(1 - noise))),
+          emissive: hsl2rgb(
+            vec3f(
+              0.6,
+              0.7,
+              saturate(waveGlow + smoothstep(0.0, 0.7, noise)) ** 4,
+            ).mul(0.8),
+          ),
+          shininess: f32(32),
+        })
+      },
 
-    maxSteps: 100,
-    maxDistance: 100,
-    epsilon: 0.003,
-    epsilonNormal: 0.01,
-
-    debug: false,
-  })
+      maxSteps: 100,
+      maxDistance: 100,
+      epsilon: 0.003,
+      epsilonNormal: 0.01,
+      debug: false,
+    })
+    .createRenderer()
 }
 
 const calcTwistedP = (p: v3f, kelp: KelpStruct): v3f => {

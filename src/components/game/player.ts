@@ -75,14 +75,8 @@ export function applyMovementInputToPlayer(world: World) {
 }
 
 export function createRenderPlayerSystem(world: World) {
-  return createSDFInstancesRenderer({
-    name: 'Player',
-    world,
-
-    instanceStruct: PlayerStruct,
-    instanceCapacity: 1,
-
-    writeBuffers: (buffer) => {
+  return createSDFInstancesRenderer(world, 'Player')
+    .withBuffer(PlayerStruct, 1, (buffer) => {
       const players = query(world, [Player, Position])
       if (players.length === 0) return 0
 
@@ -96,72 +90,73 @@ export function createRenderPlayerSystem(world: World) {
       ])
 
       return players.length
-    },
+    })
+    .withRaymarching({
+      calcAABB: (player, elapsed) => {
+        'use gpu'
 
-    calcAABB: (player, elapsed) => {
-      'use gpu'
+        let minPt = vec3f(-0.02)
+        let maxPt = vec3f(0.02)
+        for (let i = 0; i < WIGGLER_COUNT; i++) {
+          const offset = getWiggleOffset(player, elapsed, i).mul(-1)
+          minPt = min(minPt, offset)
+          maxPt = max(maxPt, offset)
+        }
 
-      let minPt = vec3f(-0.02)
-      let maxPt = vec3f(0.02)
-      for (let i = 0; i < WIGGLER_COUNT; i++) {
-        const offset = getWiggleOffset(player, elapsed, i).mul(-1)
-        minPt = min(minPt, offset)
-        maxPt = max(maxPt, offset)
-      }
+        return AABB({
+          min: minPt.add(player.position).sub(0.03),
+          max: maxPt.add(player.position).add(0.03),
+        })
+      },
 
-      return AABB({
-        min: minPt.add(player.position).sub(0.03),
-        max: maxPt.add(player.position).add(0.03),
-      })
-    },
+      sdSurface: (p, player, elapsed) => {
+        'use gpu'
+        const position = p.sub(player.position)
+        const radius = SIZE / 2
 
-    sdSurface: (p, player, elapsed) => {
-      'use gpu'
-      const position = p.sub(player.position)
-      const radius = SIZE / 2
+        let d = sdSphere(position, radius * 1.3)
 
-      let d = sdSphere(position, radius * 1.3)
+        for (let i = 0; i < WIGGLER_COUNT; i++) {
+          const offset = getWiggleOffset(player, elapsed, i)
+          d = opSmoothUnion(d, sdSphere(position.add(offset), radius * 0.3), 0.04)
+        }
+        return d
+      },
 
-      for (let i = 0; i < WIGGLER_COUNT; i++) {
-        const offset = getWiggleOffset(player, elapsed, i)
-        d = opSmoothUnion(d, sdSphere(position.add(offset), radius * 0.3), 0.04)
-      }
-      return d
-    },
+      calcSurfaceColors: (hitPos, player, elapsed) => {
+        'use gpu'
 
-    calcSurfaceColors: (hitPos, player, elapsed) => {
-      'use gpu'
+        const noise =
+          perlin3d.sample(
+            hitPos
+              .sub(player.position)
+              .add(elapsed * 0.0)
+              .mul(70),
+          ) *
+            0.1 +
+          0.02
 
-      const noise =
-        perlin3d.sample(
-          hitPos
-            .sub(player.position)
-            .add(elapsed * 0.0)
-            .mul(70),
-        ) *
-          0.1 +
-        0.02
+        const value = clamp(
+          easeOutCubic(1 - length(hitPos.sub(player.position)) / 0.2) + noise,
+          0.8,
+          1,
+        )
 
-      const value = clamp(
-        easeOutCubic(1 - length(hitPos.sub(player.position)) / 0.2) + noise,
-        0.8,
-        1,
-      )
+        return SurfaceColors({
+          diffuse: vec3f(0),
+          specular: vec3f(0),
+          emissive: vec3f(hsl2rgb(vec3f(0.6, 0.8, value))),
+          shininess: f32(0),
+        })
+      },
 
-      return SurfaceColors({
-        diffuse: vec3f(0),
-        specular: vec3f(0),
-        emissive: vec3f(hsl2rgb(vec3f(0.6, 0.8, value))),
-        shininess: f32(0),
-      })
-    },
-
-    maxSteps: 60,
-    maxDistance: 10,
-    epsilon: 0.001,
-    epsilonNormal: 1,
-    debug: false,
-  })
+      maxSteps: 60,
+      maxDistance: 10,
+      epsilon: 0.001,
+      epsilonNormal: 1,
+      debug: false,
+    })
+    .createRenderer()
 }
 
 function getWiggleOffset(

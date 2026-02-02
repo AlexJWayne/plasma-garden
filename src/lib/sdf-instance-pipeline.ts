@@ -1,6 +1,5 @@
 import tgpu, { type TgpuBuffer, type ValidateBufferSchema } from 'typegpu'
 import {
-  type AnyWgslData,
   type BaseData,
   type Infer,
   type WgslArray,
@@ -31,56 +30,7 @@ import {
   depthStencil,
 } from './web-gpu'
 
-export function createSdfSurfaceShaders() {}
-
-export type SdSurface<T, R = number> = (p: v3f, arg: T, elapsed: number) => R
-
-export const AABB = struct({ min: vec3f, max: vec3f })
-export type AABB = Infer<typeof AABB>
-
-export const RayHit = struct({ isHit: bool, pos: vec3f })
-export type RayHit = Infer<typeof RayHit>
-
-const DEBUG_MISS = { color: vec4f(1, 0, 1, 1).mul(0.25), depth: 0 }
-
-export function createSDFInstancesRenderer<T extends BaseData>({
-  name,
-  world,
-
-  instanceStruct,
-  instanceCapacity,
-
-  writeBuffers,
-  calcAABB,
-  sdSurface,
-  calcSurfaceColors,
-  postProcessNormal = (n) => {
-    'use gpu'
-    return vec3f(n)
-  },
-
-  maxSteps,
-  maxDistance,
-  epsilon,
-  epsilonNormal = epsilon,
-
-  debug = false,
-}: {
-  /** The TypeGPU world instance. */
-  world: World
-
-  /** Name of the pipeline for debugging and performance tracking. */
-  name: string
-
-  /** The struct type for instances. */
-  instanceStruct: T
-
-  /** The maximum number of instances to support. */
-  instanceCapacity: number
-
-  /** Query the world's entities and write to the instance buffer. Return the number of instances to render. */
-  writeBuffers: (buffer: TgpuBuffer<WgslArray<T>>) => number
-
+type RaymarchingConfig<T extends BaseData> = {
   /** Calculate the axis-aligned bounding box for an entity instance. */
   calcAABB: (entity: Infer<T>, elapsed: number) => AABB
 
@@ -111,74 +61,216 @@ export function createSDFInstancesRenderer<T extends BaseData>({
 
   /** Enable debug visualization. This shows all AABBs for all rendered instances. */
   debug?: boolean
-}) {
-  const instanceBuffer = world.root
-    .createBuffer(
-      // @ts-expect-error ???
-      arrayOf(instanceStruct, instanceCapacity) as ValidateBufferSchema<
-        WgslArray<T>
-      >,
-    )
-    // @ts-expect-error ???
-    .$usage('storage')
+}
 
-  // @ts-expect-error TypeGPU type system limitation with readonly view
-  const instanceBufferReadonly = instanceBuffer.as('readonly')
+export type SdSurface<T, R = number> = (p: v3f, arg: T, elapsed: number) => R
 
-  const cameraBuffer = world.camera.buffer.as('uniform')
-  const timeBuffer = world.time.buffer.as('uniform')
+export const AABB = struct({ min: vec3f, max: vec3f })
+export type AABB = Infer<typeof AABB>
 
-  const vertexProgram = tgpu['~unstable'].vertexFn({
-    in: {
-      instanceIdx: builtin.instanceIndex,
-      vertexIdx: builtin.vertexIndex,
+export const RayHit = struct({ isHit: bool, pos: vec3f })
+export type RayHit = Infer<typeof RayHit>
+
+const DEBUG_MISS = { color: vec4f(1, 0, 1, 1).mul(0.25), depth: 0 }
+
+export function createSDFInstancesRenderer(world: World, name: string) {
+  return {
+    withBuffer<T extends BaseData>(
+      instanceStruct: T,
+      instanceCapacity: number,
+      writeBuffers: (buffer: TgpuBuffer<WgslArray<T>>) => number,
+    ) {
+      return {
+        withRaymarching(config: RaymarchingConfig<T>) {
+          return {
+            createRenderer() {
+              const {
+                calcAABB,
+                sdSurface,
+                calcSurfaceColors,
+                maxSteps,
+                maxDistance,
+                epsilon,
+              } = config
+
+              const epsilonNormal = config.epsilonNormal ?? epsilon
+              const postProcessNormal =
+                config.postProcessNormal ??
+                ((n) => {
+                  'use gpu'
+                  return vec3f(n)
+                })
+              const debug = config.debug ?? false
+
+              const instanceBuffer = world.root
+                .createBuffer(
+                  arrayOf(
+                    // @ts-expect-error ???
+                    instanceStruct,
+                    instanceCapacity,
+                  ) as ValidateBufferSchema<WgslArray<T>>,
+                )
+                // @ts-expect-error ???
+                .$usage('storage')
+
+              // @ts-expect-error ???
+              const instanceBufferReadonly = instanceBuffer.as('readonly')
+              const cameraBuffer = world.camera.buffer.as('uniform')
+              const timeBuffer = world.time.buffer.as('uniform')
+
+              const vertexProgram = tgpu['~unstable'].vertexFn({
+                in: {
+                  instanceIdx: builtin.instanceIndex,
+                  vertexIdx: builtin.vertexIndex,
+                },
+                out: {
+                  worldPos: vec3f,
+                  clipPos: builtin.position,
+                  instanceIdx: interpolate('flat', u32),
+                },
+              })(({ vertexIdx, instanceIdx }) => {
+                const local = cubeVertices.$[vertexIdx]
+                const instance = instanceBufferReadonly.$[
+                  instanceIdx
+                ] as Infer<T>
+
+                const aabb = calcAABB(instance, timeBuffer.$.elapsed)
+                const worldPos = select(
+                  aabb.min,
+                  aabb.max,
+                  vec3b(local.x > 0, local.y > 0, local.z > 0),
+                )
+
+                const clipPos = cameraBuffer.$.viewMatrix.mul(
+                  vec4f(worldPos, 1),
+                )
+
+                return {
+                  worldPos,
+                  clipPos,
+                  instanceIdx: instanceIdx,
+                }
+              })
+
+              function raymarch(
+                cameraPos: v3f,
+                worldPos: v3f,
+                arg: Infer<T>,
+              ): RayHit {
+                'use gpu'
+
+                const triDiff = worldPos.sub(cameraPos)
+                let totalDistance = length(triDiff)
+                const rayDirection = normalize(triDiff)
+
+                for (let i = 0; i < maxSteps; i++) {
+                  const point = cameraPos.add(rayDirection.mul(totalDistance))
+                  const distance = sdSurface(point, arg, timeBuffer.$.elapsed)
+
+                  if (distance < epsilon)
+                    return RayHit({ isHit: true, pos: point })
+                  if (distance > maxDistance) break
+
+                  totalDistance += distance
+                }
+
+                return RayHit({ isHit: false, pos: vec3f() })
+              }
+
+              const calcNormal = createCalcNormal(
+                world,
+                sdSurface,
+                epsilonNormal,
+              )
+
+              const fragmentProgram = tgpu['~unstable'].fragmentFn({
+                in: {
+                  worldPos: vec3f,
+                  instanceIdx: interpolate('flat', u32),
+                },
+                out: {
+                  color: vec4f,
+                  depth: builtin.fragDepth,
+                },
+              })(({ worldPos, instanceIdx }) => {
+                'use gpu'
+
+                const instance = instanceBufferReadonly.$[
+                  instanceIdx
+                ] as Infer<T>
+                const rayHit = raymarch(cameraBuffer.$.pos, worldPos, instance)
+
+                if (!rayHit.isHit) {
+                  if (debug) return DEBUG_MISS
+                  return { color: vec4f(0), depth: 1 }
+                }
+
+                const normal = postProcessNormal(
+                  calcNormal(rayHit.pos, instance),
+                  rayHit.pos,
+                  instance,
+                )
+
+                const color = calcSurfaceLighting(
+                  Lighting({
+                    cameraPos: cameraBuffer.$.pos,
+                    lightPos: cameraBuffer.$.playerPos,
+                    surfacePos: rayHit.pos,
+                    normal,
+                    surface: calcSurfaceColors(
+                      rayHit.pos,
+                      instance,
+                      timeBuffer.$.elapsed,
+                    ),
+                  }),
+                )
+
+                const hitClipPos = cameraBuffer.$.viewMatrix.mul(
+                  vec4f(rayHit.pos, 1),
+                )
+                return {
+                  color: vec4f(color, 1),
+                  depth: hitClipPos.z / hitClipPos.w,
+                }
+              })
+
+              const pipeline = world.root['~unstable']
+                .withVertex(vertexProgram)
+                .withFragment(fragmentProgram, {
+                  color: { format: presentationFormat, blend: blending.normal },
+                })
+                .withDepthStencil(depthStencil)
+                .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
+                .withMultisample({ count: sampleCount })
+                .createPipeline()
+                .withPerformanceCallback(
+                  createPipelinePerformanceCallback(name),
+                )
+
+              return function render() {
+                const count = writeBuffers(instanceBuffer)
+                if (count === 0) return
+
+                pipeline
+                  .withColorAttachment({ color: createColorAttachment(world) })
+                  .withDepthStencilAttachment(createDepthAttachment(world))
+                  .draw(cubeVertices.$.length, count)
+              }
+            },
+          }
+        },
+      }
     },
-    out: {
-      worldPos: vec3f,
-      clipPos: builtin.position,
-      instanceIdx: interpolate('flat', u32),
-    },
-  })(({ vertexIdx, instanceIdx }) => {
-    const local = cubeVertices.$[vertexIdx]
-    const instance = instanceBufferReadonly.$[instanceIdx] as Infer<T>
-
-    const aabb = calcAABB(instance, timeBuffer.$.elapsed)
-    const worldPos = select(
-      aabb.min,
-      aabb.max,
-      vec3b(local.x > 0, local.y > 0, local.z > 0),
-    )
-
-    const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
-
-    return {
-      worldPos,
-      clipPos,
-      instanceIdx: instanceIdx,
-    }
-  })
-
-  function raymarch(cameraPos: v3f, worldPos: v3f, arg: Infer<T>): RayHit {
-    'use gpu'
-
-    const triDiff = worldPos.sub(cameraPos)
-    let totalDistance = length(triDiff)
-    const rayDirection = normalize(triDiff)
-
-    for (let i = 0; i < maxSteps; i++) {
-      const point = cameraPos.add(rayDirection.mul(totalDistance))
-      const distance = sdSurface(point, arg, timeBuffer.$.elapsed)
-
-      if (distance < epsilon) return RayHit({ isHit: true, pos: point })
-      if (distance > maxDistance) break
-
-      totalDistance += distance
-    }
-
-    return RayHit({ isHit: false, pos: vec3f() })
   }
+}
 
-  function calcNormal(p: v3f, instance: Infer<T>): v3f {
+function createCalcNormal<T extends BaseData>(
+  world: World,
+  sdSurface: SdSurface<Infer<T>>,
+  epsilonNormal: number,
+) {
+  const timeBuffer = world.time.buffer.as('uniform')
+  return function calcNormal(p: v3f, instance: Infer<T>): v3f {
     'use gpu'
     const k = vec2f(1, -1)
     return normalize(
@@ -220,66 +312,5 @@ export function createSDFInstancesRenderer<T extends BaseData>({
             ),
         ),
     )
-  }
-
-  const fragmentProgram = tgpu['~unstable'].fragmentFn({
-    in: {
-      worldPos: vec3f,
-      instanceIdx: interpolate('flat', u32),
-    },
-    out: {
-      color: vec4f,
-      depth: builtin.fragDepth,
-    },
-  })(({ worldPos, instanceIdx }) => {
-    'use gpu'
-
-    const instance = instanceBufferReadonly.$[instanceIdx] as Infer<T>
-    const rayHit = raymarch(cameraBuffer.$.pos, worldPos, instance)
-
-    if (!rayHit.isHit) {
-      if (debug) return DEBUG_MISS
-      return { color: vec4f(0), depth: 1 }
-    }
-
-    const normal = postProcessNormal(
-      calcNormal(rayHit.pos, instance),
-      rayHit.pos,
-      instance,
-    )
-
-    const color = calcSurfaceLighting(
-      Lighting({
-        cameraPos: cameraBuffer.$.pos,
-        lightPos: cameraBuffer.$.playerPos,
-        surfacePos: rayHit.pos,
-        normal,
-        surface: calcSurfaceColors(rayHit.pos, instance, timeBuffer.$.elapsed),
-      }),
-    )
-
-    const hitClipPos = cameraBuffer.$.viewMatrix.mul(vec4f(rayHit.pos, 1))
-    return { color: vec4f(color, 1), depth: hitClipPos.z / hitClipPos.w }
-  })
-
-  const pipeline = world.root['~unstable']
-    .withVertex(vertexProgram)
-    .withFragment(fragmentProgram, {
-      color: { format: presentationFormat, blend: blending.normal },
-    })
-    .withDepthStencil(depthStencil)
-    .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
-    .withMultisample({ count: sampleCount })
-    .createPipeline()
-    .withPerformanceCallback(createPipelinePerformanceCallback(name))
-
-  return function render() {
-    const count = writeBuffers(instanceBuffer)
-    if (count === 0) return
-
-    pipeline
-      .withColorAttachment({ color: createColorAttachment(world) })
-      .withDepthStencilAttachment(createDepthAttachment(world))
-      .draw(cubeVertices.$.length, count)
   }
 }
