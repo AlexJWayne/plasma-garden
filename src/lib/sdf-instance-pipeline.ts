@@ -73,6 +73,11 @@ export type RayHit = Infer<typeof RayHit>
 
 const DEBUG_MISS = { color: vec4f(1, 0, 1, 1).mul(0.25), depth: 0 }
 
+function vec3fIdentity(v: v3f) {
+  'use gpu'
+  return vec3f(v)
+}
+
 export function createSDFInstancesRenderer(world: World, name: string) {
   return {
     withBuffer<T extends BaseData>(
@@ -93,63 +98,19 @@ export function createSDFInstancesRenderer(world: World, name: string) {
                 epsilon,
               } = config
 
-              const epsilonNormal = config.epsilonNormal ?? epsilon
-              const postProcessNormal =
-                config.postProcessNormal ??
-                ((n) => {
-                  'use gpu'
-                  return vec3f(n)
-                })
-              const debug = config.debug ?? false
-
-              const instanceBuffer = world.root
-                .createBuffer(
-                  arrayOf(
-                    // @ts-expect-error ???
-                    instanceStruct,
-                    instanceCapacity,
-                  ) as ValidateBufferSchema<WgslArray<T>>,
-                )
-                // @ts-expect-error ???
-                .$usage('storage')
+              const instanceBuffer = createInstanceBuffer({
+                world,
+                instanceStruct,
+                instanceCapacity,
+              })
 
               // @ts-expect-error ???
               const instanceBufferReadonly = instanceBuffer.as('readonly')
-              const cameraBuffer = world.camera.buffer.as('uniform')
-              const timeBuffer = world.time.buffer.as('uniform')
 
-              const vertexProgram = tgpu['~unstable'].vertexFn({
-                in: {
-                  instanceIdx: builtin.instanceIndex,
-                  vertexIdx: builtin.vertexIndex,
-                },
-                out: {
-                  worldPos: vec3f,
-                  clipPos: builtin.position,
-                  instanceIdx: interpolate('flat', u32),
-                },
-              })(({ vertexIdx, instanceIdx }) => {
-                const local = cubeVertices.$[vertexIdx]
-                const instance = instanceBufferReadonly.$[
-                  instanceIdx
-                ] as Infer<T>
-
-                const aabb = calcAABB(instance, timeBuffer.$.elapsed)
-                const worldPos = select(
-                  aabb.min,
-                  aabb.max,
-                  vec3b(local.x > 0, local.y > 0, local.z > 0),
-                )
-
-                const clipPos = cameraBuffer.$.viewMatrix.mul(
-                  vec4f(worldPos, 1),
-                )
-
-                return {
-                  worldPos,
-                  clipPos,
-                  instanceIdx: instanceIdx,
-                }
+              const vertexProgram = createVertexProgram({
+                world,
+                instanceBufferReadonly,
+                calcAABB,
               })
 
               const raymarch = createRaymarch({
@@ -163,7 +124,7 @@ export function createSDFInstancesRenderer(world: World, name: string) {
               const calcNormal = createCalcNormal({
                 world,
                 sdSurface,
-                epsilonNormal,
+                epsilonNormal: config.epsilonNormal ?? epsilon,
               })
 
               const fragmentProgram = createFragmentProgram({
@@ -171,23 +132,17 @@ export function createSDFInstancesRenderer(world: World, name: string) {
                 instanceBufferReadonly,
                 raymarch,
                 calcNormal,
-                postProcessNormal,
+                postProcessNormal: config.postProcessNormal ?? vec3fIdentity,
                 calcSurfaceColors,
-                debug,
+                debug: config.debug ?? false,
               })
 
-              const pipeline = world.root['~unstable']
-                .withVertex(vertexProgram)
-                .withFragment(fragmentProgram, {
-                  color: { format: presentationFormat, blend: blending.normal },
-                })
-                .withDepthStencil(depthStencil)
-                .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
-                .withMultisample({ count: sampleCount })
-                .createPipeline()
-                .withPerformanceCallback(
-                  createPipelinePerformanceCallback(name),
-                )
+              const pipeline = createPipeline({
+                world,
+                name,
+                vertexProgram,
+                fragmentProgram,
+              })
 
               return function render() {
                 const count = writeBuffers(instanceBuffer)
@@ -204,6 +159,72 @@ export function createSDFInstancesRenderer(world: World, name: string) {
       }
     },
   }
+}
+
+function createInstanceBuffer<T extends BaseData>({
+  world,
+  instanceStruct,
+  instanceCapacity,
+}: {
+  world: World
+  instanceStruct: T
+  instanceCapacity: number
+}) {
+  return (
+    world.root
+      .createBuffer(
+        arrayOf(
+          // @ts-expect-error ???
+          instanceStruct,
+          instanceCapacity,
+        ) as ValidateBufferSchema<WgslArray<T>>,
+      )
+      // @ts-expect-error ???
+      .$usage('storage')
+  )
+}
+
+function createVertexProgram<T extends BaseData>({
+  world,
+  instanceBufferReadonly,
+  calcAABB,
+}: {
+  world: World
+  instanceBufferReadonly: ReturnType<TgpuBuffer<WgslArray<T>>['as']>
+  calcAABB: (entity: Infer<T>, elapsed: number) => AABB
+}) {
+  const cameraBuffer = world.camera.buffer.as('uniform')
+  const timeBuffer = world.time.buffer.as('uniform')
+
+  return tgpu['~unstable'].vertexFn({
+    in: {
+      instanceIdx: builtin.instanceIndex,
+      vertexIdx: builtin.vertexIndex,
+    },
+    out: {
+      worldPos: vec3f,
+      clipPos: builtin.position,
+      instanceIdx: interpolate('flat', u32),
+    },
+  })(({ vertexIdx, instanceIdx }) => {
+    const local = cubeVertices.$[vertexIdx]
+    const instance = instanceBufferReadonly.$[instanceIdx] as Infer<T>
+
+    const aabb = calcAABB(instance, timeBuffer.$.elapsed)
+    const worldPos = select(
+      aabb.min,
+      aabb.max,
+      vec3b(local.x > 0, local.y > 0, local.z > 0),
+    )
+
+    const clipPos = cameraBuffer.$.viewMatrix.mul(vec4f(worldPos, 1))
+
+    return {
+      worldPos,
+      clipPos,
+      instanceIdx: instanceIdx,
+    }
+  })
 }
 
 function createRaymarch<T extends BaseData>({
@@ -356,11 +377,7 @@ function createFragmentProgram<T extends BaseData>({
         lightPos: cameraBuffer.$.playerPos,
         surfacePos: rayHit.pos,
         normal,
-        surface: calcSurfaceColors(
-          rayHit.pos,
-          instance,
-          timeBuffer.$.elapsed,
-        ),
+        surface: calcSurfaceColors(rayHit.pos, instance, timeBuffer.$.elapsed),
       }),
     )
 
@@ -370,4 +387,27 @@ function createFragmentProgram<T extends BaseData>({
       depth: hitClipPos.z / hitClipPos.w,
     }
   })
+}
+
+function createPipeline<T extends BaseData>({
+  world,
+  name,
+  vertexProgram,
+  fragmentProgram,
+}: {
+  world: World
+  name: string
+  vertexProgram: ReturnType<typeof createVertexProgram<T>>
+  fragmentProgram: ReturnType<typeof createFragmentProgram<T>>
+}) {
+  return world.root['~unstable']
+    .withVertex(vertexProgram)
+    .withFragment(fragmentProgram, {
+      color: { format: presentationFormat, blend: blending.normal },
+    })
+    .withDepthStencil(depthStencil)
+    .withPrimitive({ topology: 'triangle-list', cullMode: 'back' })
+    .withMultisample({ count: sampleCount })
+    .createPipeline()
+    .withPerformanceCallback(createPipelinePerformanceCallback(name))
 }
