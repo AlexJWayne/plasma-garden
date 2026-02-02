@@ -3,7 +3,6 @@ import { opSmoothUnion, sdSphere } from '@typegpu/sdf'
 import { addEntity, query } from 'bitecs'
 import {
   type Infer,
-  arrayOf,
   f32,
   struct,
   type v3f,
@@ -76,23 +75,20 @@ export function applyMovementInputToPlayer(world: World) {
 }
 
 export function createRenderPlayerSystem(world: World) {
-  const playerBuffer = world.root
-    .createBuffer(arrayOf(PlayerStruct, 1))
-    .$usage('storage')
-
   return createSDFInstancesRenderer({
     name: 'Player',
     world,
 
-    instanceBuffer: playerBuffer.as('readonly'),
+    instanceStruct: PlayerStruct,
+    instanceCapacity: 1,
 
-    writeBuffers: () => {
+    writeBuffers: (buffer) => {
       const players = query(world, [Player, Position])
       if (players.length === 0) return 0
 
       const player = players[0]
 
-      playerBuffer.write([
+      buffer.write([
         {
           position: vec3f(Position[player], PLAYER_HEIGHT),
           velocity: vec3f(Velocity[player], 0),

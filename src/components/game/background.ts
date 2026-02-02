@@ -1,6 +1,6 @@
 import { opSmoothDifference, sdBox2d, sdBox3d, sdSphere } from '@typegpu/sdf'
 import { addEntity, query } from 'bitecs'
-import { type Infer, arrayOf, f32, struct, vec2f, vec3f } from 'typegpu/data'
+import { type Infer, f32, struct, vec2f, vec3f } from 'typegpu/data'
 import { clamp, mix, round } from 'typegpu/std'
 
 import { SurfaceColors } from '../../lib/lighting'
@@ -23,21 +23,18 @@ export function createBackgroundEntity(world: World): void {
 }
 
 export function createRenderBackgroundSystem(world: World) {
-  const backgroundBuffer = world.root
-    .createBuffer(arrayOf(BackgroundStruct, 1))
-    .$usage('storage')
-
   const baseRender = createSDFInstancesRenderer({
     name: 'Background',
     world,
 
-    instanceBuffer: backgroundBuffer.as('readonly'),
+    instanceStruct: BackgroundStruct,
+    instanceCapacity: 1,
 
-    writeBuffers: () => {
+    writeBuffers: (buffer) => {
       const backgrounds = query(world, [Background])
       if (backgrounds.length === 0) return 0
 
-      backgroundBuffer.write([{ pos: vec3f(0) }])
+      buffer.write([{ pos: vec3f(0) }])
 
       return backgrounds.length
     },

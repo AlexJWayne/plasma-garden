@@ -1,8 +1,10 @@
-import tgpu, { type TgpuBufferReadonly } from 'typegpu'
+import tgpu, { type TgpuBuffer, type ValidateBufferSchema } from 'typegpu'
 import {
+  type AnyWgslData,
   type BaseData,
   type Infer,
   type WgslArray,
+  arrayOf,
   bool,
   builtin,
   interpolate,
@@ -45,7 +47,8 @@ export function createSDFInstancesRenderer<T extends BaseData>({
   name,
   world,
 
-  instanceBuffer,
+  instanceStruct,
+  instanceCapacity,
 
   writeBuffers,
   calcAABB,
@@ -69,11 +72,14 @@ export function createSDFInstancesRenderer<T extends BaseData>({
   /** Name of the pipeline for debugging and performance tracking. */
   name: string
 
-  /** The instance data. Should be an array of structs, one item per instance. */
-  instanceBuffer: TgpuBufferReadonly<WgslArray<T>>
+  /** The struct type for instances. */
+  instanceStruct: T
 
-  /** Query the world's entities and write to `instanceBuffer`. Return the number of instances to render. */
-  writeBuffers: () => number
+  /** The maximum number of instances to support. */
+  instanceCapacity: number
+
+  /** Query the world's entities and write to the instance buffer. Return the number of instances to render. */
+  writeBuffers: (buffer: TgpuBuffer<WgslArray<T>>) => number
 
   /** Calculate the axis-aligned bounding box for an entity instance. */
   calcAABB: (entity: Infer<T>, elapsed: number) => AABB
@@ -106,6 +112,18 @@ export function createSDFInstancesRenderer<T extends BaseData>({
   /** Enable debug visualization. This shows all AABBs for all rendered instances. */
   debug?: boolean
 }) {
+  const instanceBuffer = world.root
+    .createBuffer(
+      arrayOf(instanceStruct, instanceCapacity) as ValidateBufferSchema<
+        WgslArray<T>
+      >,
+    )
+    // @ts-expect-error TypeGPU generic constraint limitation with storage usage
+    .$usage('storage')
+
+  // @ts-expect-error TypeGPU type system limitation with readonly view
+  const instanceBufferReadonly = instanceBuffer.as('readonly')
+
   const cameraBuffer = world.camera.buffer.as('uniform')
   const timeBuffer = world.time.buffer.as('uniform')
 
@@ -121,7 +139,7 @@ export function createSDFInstancesRenderer<T extends BaseData>({
     },
   })(({ vertexIdx, instanceIdx }) => {
     const local = cubeVertices.$[vertexIdx]
-    const instance = instanceBuffer.$[instanceIdx] as Infer<T>
+    const instance = instanceBufferReadonly.$[instanceIdx] as Infer<T>
 
     const aabb = calcAABB(instance, timeBuffer.$.elapsed)
     const worldPos = select(
@@ -215,7 +233,7 @@ export function createSDFInstancesRenderer<T extends BaseData>({
   })(({ worldPos, instanceIdx }) => {
     'use gpu'
 
-    const instance = instanceBuffer.$[instanceIdx] as Infer<T>
+    const instance = instanceBufferReadonly.$[instanceIdx] as Infer<T>
     const rayHit = raymarch(cameraBuffer.$.pos, worldPos, instance)
 
     if (!rayHit.isHit) {
@@ -255,7 +273,7 @@ export function createSDFInstancesRenderer<T extends BaseData>({
     .withPerformanceCallback(createPipelinePerformanceCallback(name))
 
   return function render() {
-    const count = writeBuffers()
+    const count = writeBuffers(instanceBuffer)
     if (count === 0) return
 
     pipeline

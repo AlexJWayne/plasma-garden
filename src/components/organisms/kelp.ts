@@ -1,15 +1,7 @@
 import { perlin3d } from '@typegpu/noise'
 import { opExtrudeY, opSmoothUnion, sdLine } from '@typegpu/sdf'
 import { addEntity, query, set } from 'bitecs'
-import {
-  type Infer,
-  arrayOf,
-  f32,
-  struct,
-  type v3f,
-  vec2f,
-  vec3f,
-} from 'typegpu/data'
+import { type Infer, f32, struct, type v3f, vec2f, vec3f } from 'typegpu/data'
 import { abs, saturate, sin, smoothstep } from 'typegpu/std'
 
 import { hsl2rgb } from '../../lib/hsl'
@@ -65,21 +57,18 @@ export function spawnKelpSystem(world: World): void {
 }
 
 export function createRenderKelpSystem(world: World) {
-  const kelpsBuffer = world.root
-    .createBuffer(arrayOf(KelpStruct, 400))
-    .$usage('storage')
-
   const renderKelpSystem = createSDFInstancesRenderer({
     name: 'Kelp',
     world,
 
-    instanceBuffer: kelpsBuffer.as('readonly'),
+    instanceStruct: KelpStruct,
+    instanceCapacity: 400,
 
-    writeBuffers: () => {
+    writeBuffers: (buffer) => {
       const kelps = query(world, [Kelp, GridPosition, Lifetime])
       if (kelps.length === 0) return 0
 
-      kelpsBuffer.writePartial(
+      buffer.writePartial(
         [...kelps].map((eid, idx) => ({
           idx,
           value: {

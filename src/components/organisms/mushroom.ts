@@ -7,7 +7,7 @@ import {
   sdSphere,
 } from '@typegpu/sdf'
 import { addEntity, query, set } from 'bitecs'
-import { type Infer, arrayOf, f32, struct, vec3f } from 'typegpu/data'
+import { type Infer, f32, struct, vec3f } from 'typegpu/data'
 import { abs, atan2, clamp, fract, sin, smoothstep } from 'typegpu/std'
 
 import { easeInCubic, easeInSine } from '../../lib/ease'
@@ -67,21 +67,18 @@ export function spawnMushroomsSystem(world: World) {
 }
 
 export function createRenderMushroomSystem(world: World) {
-  const mushroomsBuffer = world.root
-    .createBuffer(arrayOf(MushroomStruct, 1000))
-    .$usage('storage')
-
   const renderMushroomSystem = createSDFInstancesRenderer({
     name: 'Mushroom',
     world,
 
-    instanceBuffer: mushroomsBuffer.as('readonly'),
+    instanceStruct: MushroomStruct,
+    instanceCapacity: 1000,
 
-    writeBuffers: () => {
+    writeBuffers: (buffer) => {
       const mushrooms = query(world, [Mushroom, GridPosition])
       if (mushrooms.length === 0) return 0
 
-      mushroomsBuffer.writePartial(
+      buffer.writePartial(
         [...mushrooms].map((eid, idx) => {
           const completion = getLifetimeCompletion(world, eid)
           return {
