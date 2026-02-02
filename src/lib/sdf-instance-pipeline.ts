@@ -152,36 +152,19 @@ export function createSDFInstancesRenderer(world: World, name: string) {
                 }
               })
 
-              function raymarch(
-                cameraPos: v3f,
-                worldPos: v3f,
-                arg: Infer<T>,
-              ): RayHit {
-                'use gpu'
+              const raymarch = createRaymarch({
+                world,
+                sdSurface,
+                maxSteps,
+                maxDistance,
+                epsilon,
+              })
 
-                const triDiff = worldPos.sub(cameraPos)
-                let totalDistance = length(triDiff)
-                const rayDirection = normalize(triDiff)
-
-                for (let i = 0; i < maxSteps; i++) {
-                  const point = cameraPos.add(rayDirection.mul(totalDistance))
-                  const distance = sdSurface(point, arg, timeBuffer.$.elapsed)
-
-                  if (distance < epsilon)
-                    return RayHit({ isHit: true, pos: point })
-                  if (distance > maxDistance) break
-
-                  totalDistance += distance
-                }
-
-                return RayHit({ isHit: false, pos: vec3f() })
-              }
-
-              const calcNormal = createCalcNormal(
+              const calcNormal = createCalcNormal({
                 world,
                 sdSurface,
                 epsilonNormal,
-              )
+              })
 
               const fragmentProgram = tgpu['~unstable'].fragmentFn({
                 in: {
@@ -264,11 +247,54 @@ export function createSDFInstancesRenderer(world: World, name: string) {
   }
 }
 
-function createCalcNormal<T extends BaseData>(
-  world: World,
-  sdSurface: SdSurface<Infer<T>>,
-  epsilonNormal: number,
-) {
+function createRaymarch<T extends BaseData>({
+  world,
+  sdSurface,
+  maxSteps,
+  maxDistance,
+  epsilon,
+}: {
+  world: World
+  sdSurface: SdSurface<Infer<T>>
+  maxSteps: number
+  maxDistance: number
+  epsilon: number
+}) {
+  const timeBuffer = world.time.buffer.as('uniform')
+  return function raymarch(
+    cameraPos: v3f,
+    worldPos: v3f,
+    arg: Infer<T>,
+  ): RayHit {
+    'use gpu'
+
+    const triDiff = worldPos.sub(cameraPos)
+    let totalDistance = length(triDiff)
+    const rayDirection = normalize(triDiff)
+
+    for (let i = 0; i < maxSteps; i++) {
+      const point = cameraPos.add(rayDirection.mul(totalDistance))
+      const distance = sdSurface(point, arg, timeBuffer.$.elapsed)
+
+      if (distance < epsilon) return RayHit({ isHit: true, pos: point })
+      if (distance > maxDistance) break
+
+      totalDistance += distance
+    }
+
+    return RayHit({ isHit: false, pos: vec3f() })
+  }
+}
+
+function createCalcNormal<T extends BaseData>({
+  world,
+  sdSurface,
+  epsilonNormal,
+}: {
+  world: World
+  sdSurface: SdSurface<Infer<T>>
+  epsilonNormal: number
+}) {
   const timeBuffer = world.time.buffer.as('uniform')
   return function calcNormal(p: v3f, instance: Infer<T>): v3f {
     'use gpu'
