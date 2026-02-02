@@ -57,7 +57,7 @@ export function spawnKelpSystem(world: World): void {
 }
 
 export function createRenderKelpSystem(world: World) {
-  const renderKelpSystem = createSDFInstancesRenderer({
+  return createSDFInstancesRenderer({
     name: 'Kelp',
     world,
 
@@ -164,8 +164,6 @@ export function createRenderKelpSystem(world: World) {
 
     debug: false,
   })
-
-  return renderKelpSystem
 }
 
 const calcTwistedP = (p: v3f, kelp: KelpStruct): v3f => {

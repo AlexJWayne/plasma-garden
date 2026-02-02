@@ -114,11 +114,12 @@ export function createSDFInstancesRenderer<T extends BaseData>({
 }) {
   const instanceBuffer = world.root
     .createBuffer(
+      // @ts-expect-error ???
       arrayOf(instanceStruct, instanceCapacity) as ValidateBufferSchema<
         WgslArray<T>
       >,
     )
-    // @ts-expect-error TypeGPU generic constraint limitation with storage usage
+    // @ts-expect-error ???
     .$usage('storage')
 
   // @ts-expect-error TypeGPU type system limitation with readonly view

@@ -23,7 +23,7 @@ export function createBackgroundEntity(world: World): void {
 }
 
 export function createRenderBackgroundSystem(world: World) {
-  const baseRender = createSDFInstancesRenderer({
+  return createSDFInstancesRenderer({
     name: 'Background',
     world,
 
@@ -83,6 +83,4 @@ export function createRenderBackgroundSystem(world: World) {
 
     debug: false,
   })
-
-  return baseRender
 }

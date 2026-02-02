@@ -67,7 +67,7 @@ export function spawnMushroomsSystem(world: World) {
 }
 
 export function createRenderMushroomSystem(world: World) {
-  const renderMushroomSystem = createSDFInstancesRenderer({
+  return createSDFInstancesRenderer({
     name: 'Mushroom',
     world,
 
@@ -218,6 +218,4 @@ export function createRenderMushroomSystem(world: World) {
 
     debug: false,
   })
-
-  return renderMushroomSystem
 }
