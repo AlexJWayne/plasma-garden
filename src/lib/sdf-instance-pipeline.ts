@@ -113,25 +113,21 @@ export function createSDFInstancesRenderer(world: World, name: string) {
                 calcAABB,
               })
 
-              const raymarch = createRaymarch({
-                world,
-                sdSurface,
-                maxSteps,
-                maxDistance,
-                epsilon,
-              })
-
-              const calcNormal = createCalcNormal({
-                world,
-                sdSurface,
-                epsilonNormal: config.epsilonNormal ?? epsilon,
-              })
-
               const fragmentProgram = createFragmentProgram({
                 world,
                 instanceBufferReadonly,
-                raymarch,
-                calcNormal,
+                raymarch: createRaymarch({
+                  world,
+                  sdSurface,
+                  maxSteps,
+                  maxDistance,
+                  epsilon,
+                }),
+                calcNormal: createCalcNormal({
+                  world,
+                  sdSurface,
+                  epsilonNormal: config.epsilonNormal ?? epsilon,
+                }),
                 postProcessNormal: config.postProcessNormal ?? vec3fIdentity,
                 calcSurfaceColors,
                 debug: config.debug ?? false,
